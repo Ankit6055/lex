@@ -24,7 +24,7 @@ const HELP = `lex ${pkg.version}: a minimal, open-source AI coding harness
 Usage
   lex                              interactive session in the current directory
   lex "fix the failing test"       one-shot: run, print, exit
-  lex compare --models a,b "task"
+  lex compare --models a,b "task"  same task on several models (omit --models to pick them)
   lex login                        save an API key to ~/.lex/auth.json
   lex models                       list models your keys can reach
 
@@ -118,8 +118,14 @@ async function main(): Promise<number> {
       return 0;
     }
     case "compare": {
-      const models = (v.models ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      if (models.length < 2 || !rest.length) fail('Usage: lex compare --models a,b "task"');
+      let models = (v.models ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      if (!rest.length) fail('Usage: lex compare --models a,b "task"');
+      if (!models.length && process.stdin.isTTY && process.stdout.isTTY) {
+        const { pickModels } = await import("./ui/app.ts");
+        models = (await pickModels()) ?? [];
+        if (!models.length) return 0;
+      }
+      if (models.length < 2) fail('Usage: lex compare --models a,b "task" (pick at least two models)');
       await runCompare({ root, models, task: rest.join(" "), diff: v.diff, maxSteps });
       return 0;
     }

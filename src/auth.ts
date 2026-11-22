@@ -33,6 +33,14 @@ export async function readConfig(): Promise<LexConfig> {
   return (await readJson<LexConfig>(path.join(configDir(), "config.json"))) ?? {};
 }
 
+/** Merge `patch` into ~/.lex/config.json (e.g. the model you last picked, so it's the default next time). */
+export async function saveConfig(patch: Partial<LexConfig>): Promise<void> {
+  const file = path.join(configDir(), "config.json");
+  const current = (await readJson<LexConfig>(file)) ?? {};
+  await mkdir(configDir(), { recursive: true, mode: 0o700 });
+  await writeFile(file, JSON.stringify({ ...current, ...patch }, null, 2) + "\n");
+}
+
 /** Every provider: built-ins plus custom ones from config.json. */
 export async function getProviders(): Promise<ProviderDef[]> {
   return allProviders((await readConfig()).providers);

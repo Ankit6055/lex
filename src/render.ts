@@ -61,7 +61,7 @@ const fmtK = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 
 /** Output tokens per second while the model was generating, if known. */
 export function tokensPerSecond(u: TurnUsage): number | undefined {
-  return u.genMs && u.outputTokens ? u.outputTokens / (u.genMs / 1000) : undefined;
+  return u.genMs && u.genTokens ? u.genTokens / (u.genMs / 1000) : undefined;
 }
 
 export function formatFooter(u: TurnUsage, spec: string): string {

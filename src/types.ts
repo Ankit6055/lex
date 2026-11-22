@@ -55,4 +55,6 @@ export interface TurnUsage {
   steps: number; toolCalls: number; inputTokens: number; outputTokens: number; ms: number;
   /** Time the model spent streaming output tokens (for tokens/second), when the provider reports it. */
   genMs?: number;
+  /** Output tokens produced during `genMs` (steps too short to time are left out). */
+  genTokens?: number;
 }

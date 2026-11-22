@@ -94,6 +94,7 @@ export async function createSession(o: {
         totals.outputTokens += result.usage.outputTokens;
         totals.ms += result.usage.ms;
         if (result.usage.genMs) totals.genMs = (totals.genMs ?? 0) + result.usage.genMs;
+        if (result.usage.genTokens) totals.genTokens = (totals.genTokens ?? 0) + result.usage.genTokens;
         return result;
       } catch (e) {
         messages.length = before;

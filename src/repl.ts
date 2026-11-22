@@ -9,7 +9,7 @@ import { createIO, closeIO, startSpinner, stopSpinner, writeWhenIdle } from "./i
 import { createApprover } from "./approval.ts";
 import { createSession, type Session } from "./session.ts";
 import { ModelError, NO_KEY_MESSAGE, suggestedModels } from "./models.ts";
-import { login, redact } from "./auth.ts";
+import { login, redact, saveConfig } from "./auth.ts";
 import { loadContext } from "./context.ts";
 import { createRenderer, formatFooter } from "./render.ts";
 import { getTodoList, renderTodos } from "./tools/todo.ts";
@@ -64,6 +64,11 @@ async function banner(s: Session): Promise<void> {
 }
 
 export async function runRepl(o: ReplOptions): Promise<void> {
+  // A real terminal gets the full interactive UI; pipes, CI and LEX_PLAIN=1 get this plain loop.
+  if (process.stdin.isTTY && process.stdout.isTTY && !process.env.LEX_PLAIN) {
+    const { runTui } = await import("./ui/app.ts");
+    return runTui(o);
+  }
   const io = createIO();
   const session = await startSession(o, io);
   await banner(session);
@@ -95,7 +100,8 @@ export async function runRepl(o: ReplOptions): Promise<void> {
       const pick = /^\d+$/.test(arg) ? lastList[Number(arg) - 1]?.spec : arg;
       if (!pick) return say(pc.red(`No model #${arg}. Run /model to see the list.`));
       const m = await session.setModel(pick);
-      say(`Switched to ${pc.cyan(m.spec)}. History kept (${session.messages.length} messages).`);
+      await saveConfig({ defaultModel: m.spec });
+      say(`Switched to ${pc.cyan(m.spec)} (saved as your default). History kept (${session.messages.length} messages).`);
     },
     async memory() {
       const memory = await readMemory(session.memoryPath);

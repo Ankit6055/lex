@@ -69,8 +69,14 @@ export async function runTurn(
         usage.steps++;
         usage.inputTokens += c.usage.inputTokens ?? 0;
         usage.outputTokens += c.usage.outputTokens ?? 0;
+        // Speed only counts steps that streamed long enough to time: a step that is just a tool call
+        // arrives in one burst, and dividing by ~0s would report thousands of tokens/second.
         const out = c.usage.outputTokens ?? 0, tps = c.performance?.outputTokensPerSecond;
-        if (out && tps) usage.genMs = (usage.genMs ?? 0) + (out / tps) * 1000;
+        const ms = out && tps ? (out / tps) * 1000 : 0;
+        if (out >= 20 && ms >= 250) {
+          usage.genMs = (usage.genMs ?? 0) + ms;
+          usage.genTokens = (usage.genTokens ?? 0) + out;
+        }
       } else if (c.type === "abort") aborted = true;
       else if (c.type === "error") error ??= c.error;
     }

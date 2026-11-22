@@ -249,7 +249,8 @@ test.skipIf(process.platform === "win32")("Ctrl-C at a TTY approval cancels the 
       let step = 0;
       const child = Bun.spawn(["node", bundle, "--cwd", project], {
         cwd: workspace,
-        env: cliEnvironment(providerConfig),
+        // The plain readline REPL; the full-screen UI has its own test (test/tui.test.ts).
+        env: { ...cliEnvironment(providerConfig), LEX_PLAIN: "1" },
         timeout: 4000,
         killSignal: "SIGKILL",
         terminal: {
