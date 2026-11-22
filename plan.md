@@ -10,6 +10,25 @@ References:
 
 **Auth model: bring your own key, no OAuth.** Users bring their own API key and pay with their own credits. v1 supports exactly three providers: **Vercel AI Gateway** (one key that reaches hundreds of models from every major lab), **OpenAI**, and **Anthropic**.
 
+## Status (2026-11-22): all phases built, v0.2.0 ready to publish
+
+| Phase | State | Commit |
+|---|---|---|
+| 0 Foundation | done (npm publish left to the owner) | `c2d58f7` |
+| 1A–1D Model, loop, tools, safety, prompt | done | `c2d58f7` |
+| 2 REPL + session | done | `e3bbc13` |
+| 3A compare · 3B docs/smoke/toy repo · 3C `task` + skills | done | `f415750` `dead0b2` `c2ec448` `b70c4c4` |
+| 4 Release | checks, tests, smoke and the §8 demo pass on a clean install; `npm publish` pending (needs npm login) | |
+
+**Where the build deliberately departs from this plan** (found while testing against real models):
+- **Name:** `lex` (npm `@ankit6055/lex`), not `lexcode`. See §2.1.
+- **Providers:** 19 built in plus custom OpenAI-compatible endpoints (`src/providers.ts`), not 3. Defaults are picked from each provider's live catalog.
+- **Context pruning (§4.2):** `before-last-3-messages` made models re-read files they had just read (GPT 6.2 Sol hit the step cap on a compare task). Now each step keeps the whole current turn and drops tool bodies only from earlier turns (`contextFor` in `src/agent.ts`).
+- **Tool execution:** `toolCallConcurrency: 1`. Parallel execution let "edit, then run tests" in one step race.
+- **Approvals** from parallel tool calls are queued. Ctrl-C at a prompt cancels the whole turn. Aborted turns are recorded as cancelled, so the model doesn't resume them.
+- **Non-interactive runs:** `ask_user` never guesses an answer (a guessed "retry" looped a denied edit for 25 steps).
+- **`task` and `load_skill`** shipped (they were stretch goals). `--continue` session resume is still open.
+
 ---
 
 ## 1. What we're building
