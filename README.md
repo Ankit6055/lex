@@ -3,7 +3,7 @@
 A minimal, open-source AI coding harness you can read in an afternoon.
 Model, tools, memory, loop. Bring your own key: no OAuth, no account, your credits.
 
-> Work in progress. Phases 0–1 of [`plan.md`](plan.md) are done. The interactive REPL (Phase 2) and `compare` (Phase 3A) are next.
+> Work in progress. Phases 0–2 of [`plan.md`](plan.md) are done (one-shot + interactive REPL). `compare` (Phase 3A) is next.
 
 ## Try it
 
@@ -11,12 +11,15 @@ Model, tools, memory, loop. Bring your own key: no OAuth, no account, your credi
 bun install
 export AI_GATEWAY_API_KEY=...        # recommended: one key, every model
 # or ANTHROPIC_API_KEY / OPENAI_API_KEY, or: bun src/cli.ts login
-bun src/cli.ts "list the files here and summarize"
+bun src/cli.ts                        # interactive session
+bun src/cli.ts "list the files here and summarize"   # one-shot
 bun src/cli.ts --model gateway:openai/gpt-6.2-sol "fix the failing test"
 bun src/cli.ts models                 # models your keys can reach
 ```
 
 Flags: `--model`, `--yolo`, `--readonly`, `--cwd`, `--max-steps`, `--version`, `--help`.
+
+In the REPL: `/model [spec|n]` switches models mid-conversation (history is kept), plus `/clear`, `/memory`, `/todo`, `/usage`, `/yolo`, `/readonly`, `/login`, `/help`, `/exit`. Ctrl-C cancels a running turn (including at an approval prompt); Ctrl-D exits.
 
 ## Develop
 
@@ -40,7 +43,8 @@ src/
   approval.ts  ask | yolo | readonly, operator-aware safe-command list
   io.ts        the single shared readline, prompts, spinner
   render.ts    stream chunks to the terminal, footer
-  repl.ts      interactive loop (Phase 2)
+  session.ts   one conversation: model, tools, history (shared by one-shot and REPL)
+  repl.ts      interactive loop, banner, slash commands
   compare.ts   same task on N models (Phase 3A)
   types.ts     contracts shared between modules
   tools/       read ls grep write edit bash todo ask remember, index.ts

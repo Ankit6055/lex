@@ -9,7 +9,7 @@ alwaysApply: false
 - **Commit and push often.** Whenever a piece of work is done and checks are green (`bun check`, `bun test`), commit it with a descriptive message and push to `origin main`. Don't batch up large uncommitted changes. Never stage `.env.local` (it holds the AI Gateway key), `dist/`, or `.lex/`.
 - **Runtime code ships for Node 22.** Code under `src/` must not use `Bun.*` APIs (`Bun.file`, `Bun.$`, `Bun.serve`, ...): use `node:fs/promises`, `node:child_process`, `node:readline`. Bun stays the dev, test and build tool (`bun test`, `bun check`, `bun run build`). This overrides the Bun-API guidance below for `src/` only; tests may use Bun APIs.
 - `plan.md` is the build plan (phases, file ownership, behavior spec). `src/types.ts` holds the cross-module contracts. `docs/ai-sdk-notes.md` has the verified AI SDK v7 API names and model IDs.
-- Layout: `src/*.ts` are the core modules (cli, repl, agent, models, auth, prompt, context, approval, io, render, compare). `src/tools/` has one file per agent tool plus `index.ts`. `src/util/` has pure shared helpers. Shared helpers go in `util/`, not inside a tool file.
+- Layout: `src/*.ts` are the core modules (cli, repl, session, agent, models, auth, prompt, context, approval, io, render, compare). `src/tools/` has one file per agent tool plus `index.ts`. `src/util/` has pure shared helpers. Shared helpers go in `util/`, not inside a tool file.
 
 Default to using Bun instead of Node.js.
 

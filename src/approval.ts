@@ -54,25 +54,33 @@ function alwaysLabel(req: ApprovalRequest): string {
 
 export function createApprover(io: IO, mode: ApprovalMode): Approver {
   const always = new Set<string>();
+  // Parallel tool calls can ask at the same time; prompts are shown one at a time, in order.
+  let queue: Promise<unknown> = Promise.resolve();
+
+  async function decide(req: ApprovalRequest): Promise<ApprovalResult> {
+    if (approver.mode === "yolo") return "allow";
+    if (approver.mode === "readonly") return "readonly";
+    if (always.has(req.alwaysKey)) return "allow";
+
+    const question = `Allow ${req.tool}: ${req.summary} ? [y]es / [n]o / [a]lways ${alwaysLabel(req)}`;
+    const text = req.detail ? `${req.detail}\n${question}` : question;
+    const answer = await io.withPaused(() => io.confirm(text));
+    if (answer === "a") {
+      always.add(req.alwaysKey);
+      return "allow";
+    }
+    return answer === "y" ? "allow" : "deny";
+  }
 
   const approver: Approver = {
     mode,
     setMode(next: ApprovalMode) {
       approver.mode = next;
     },
-    async request(req: ApprovalRequest): Promise<ApprovalResult> {
-      if (approver.mode === "yolo") return "allow";
-      if (approver.mode === "readonly") return "readonly";
-      if (always.has(req.alwaysKey)) return "allow";
-
-      const question = `Allow ${req.tool}: ${req.summary} ? [y]es / [n]o / [a]lways ${alwaysLabel(req)}`;
-      const text = req.detail ? `${req.detail}\n${question}` : question;
-      const answer = await io.withPaused(() => io.confirm(text));
-      if (answer === "a") {
-        always.add(req.alwaysKey);
-        return "allow";
-      }
-      return answer === "y" ? "allow" : "deny";
+    request(req: ApprovalRequest): Promise<ApprovalResult> {
+      const run = queue.then(() => decide(req));
+      queue = run.catch(() => {});
+      return run;
     },
     isSafeCommand,
   };

@@ -72,6 +72,27 @@ export async function runTurn(
   return { responseMessages, text, usage, aborted: false };
 }
 
+/**
+ * After an abort, the last assistant message can hold tool calls that never got a result.
+ * Providers reject such history, so drop those calls (and any message left empty).
+ */
+export function dropDanglingToolCalls(messages: ModelMessage[]): ModelMessage[] {
+  const answered = new Set<string>();
+  for (const m of messages) {
+    if (m.role === "tool") for (const p of m.content) if (p.type === "tool-result") answered.add(p.toolCallId);
+  }
+  const out: ModelMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "assistant" && Array.isArray(m.content)) {
+      const content = m.content.filter((p) => p.type !== "tool-call" || answered.has(p.toolCallId));
+      if (content.length) out.push({ ...m, content });
+    } else {
+      out.push(m);
+    }
+  }
+  return out;
+}
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) {
     const status = (e as { statusCode?: number }).statusCode;

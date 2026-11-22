@@ -1,6 +1,6 @@
 {
   "name": "@ankit6055/lex",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A minimal, open-source, model-agnostic AI coding harness for your terminal",
   "type": "module",
   "bin": {

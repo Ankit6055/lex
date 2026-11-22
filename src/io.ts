@@ -116,9 +116,17 @@ function getRl(): readline.Interface {
     settle(null);
   });
   r.on("SIGINT", () => {
+    if (waiter && r.line) {
+      // Ctrl-C with text typed clears the line (like a shell); on an empty line it cancels/exits.
+      r.write(null, { ctrl: true, name: "e" });
+      r.write(null, { ctrl: true, name: "u" });
+      return;
+    }
     if (waiter) {
       process.stderr.write(pc.dim("^C") + "\n");
       settle(null);
+      // Also tell the process: mid-turn (e.g. at an approval prompt) Ctrl-C cancels the whole turn.
+      process.emit("SIGINT");
     } else {
       process.kill(process.pid, "SIGINT");
     }

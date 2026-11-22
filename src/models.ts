@@ -148,6 +148,14 @@ export async function resolveModel(spec?: string): Promise<ResolvedModel> {
   return { spec: `${provider}:${id}`, provider, id, model: build(provider, id, apiKey) };
 }
 
+/** A short, curated list for `/model` (the full gateway list is hundreds of entries). */
+export async function suggestedModels(): Promise<ModelInfo[]> {
+  const keys = await keysPresent();
+  return PROVIDERS.filter((p) => keys[p]).flatMap((provider) =>
+    SHORTLIST[provider].map((id) => ({ spec: `${provider}:${id}`, provider, id })),
+  );
+}
+
 /** Models reachable with the keys you have: live gateway list plus static direct shortlists. */
 export async function listAvailable(): Promise<ModelInfo[]> {
   const keys = await keysPresent();

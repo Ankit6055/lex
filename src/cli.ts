@@ -3,18 +3,14 @@ import { parseArgs } from "node:util";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import pc from "picocolors";
-import type { ModelMessage } from "ai";
 import pkg from "../package.json" with { type: "json" };
 import type { ApprovalMode } from "./types.ts";
-import { ModelError, listAvailable, resolveModel } from "./models.ts";
+import { ModelError, NO_KEY_MESSAGE, listAvailable } from "./models.ts";
 import { login, redact } from "./auth.ts";
-import { createAgent, runTurn } from "./agent.ts";
 import { createRenderer } from "./render.ts";
 import { createIO, startSpinner, stopSpinner } from "./io.ts";
 import { createApprover } from "./approval.ts";
-import { buildTools } from "./tools/index.ts";
-import { loadContext } from "./context.ts";
-import { buildSystemPrompt } from "./prompt.ts";
+import { createSession } from "./session.ts";
 import { runRepl } from "./repl.ts";
 import { runCompare } from "./compare.ts";
 
@@ -45,16 +41,7 @@ function fail(msg: string, code = 1): never {
 
 async function oneShot(o: { root: string; prompt: string; model?: string; mode: ApprovalMode; maxSteps?: number }) {
   const io = createIO();
-  const approver = createApprover(io, o.mode);
-  const tools = buildTools({ root: o.root, approver, io, memoryPath: path.join(o.root, ".lex", "memory.md") });
-  const [resolved, ctx] = await Promise.all([resolveModel(o.model), loadContext(o.root)]);
-  const agent = createAgent({
-    model: resolved,
-    tools,
-    instructions: buildSystemPrompt({ ...ctx, toolNames: Object.keys(tools) }),
-    maxSteps: o.maxSteps,
-  });
-
+  const session = await createSession({ root: o.root, io, approver: createApprover(io, o.mode), model: o.model, maxSteps: o.maxSteps });
   const controller = new AbortController();
   const onSigint = () => {
     if (controller.signal.aborted) process.exit(130);
@@ -63,10 +50,9 @@ async function oneShot(o: { root: string; prompt: string; model?: string; mode: 
   process.on("SIGINT", onSigint);
 
   const renderer = createRenderer({ spinner: { start: startSpinner, stop: stopSpinner } });
-  const messages: ModelMessage[] = [{ role: "user", content: o.prompt }];
   try {
-    const turn = await runTurn(agent, messages, { signal: controller.signal, onChunk: renderer.onChunk });
-    renderer.footer(turn.usage, resolved.spec);
+    const turn = await session.turn(o.prompt, { signal: controller.signal, onChunk: renderer.onChunk });
+    renderer.footer(turn.usage, session.model.spec);
     return turn.aborted ? 130 : 0;
   } finally {
     stopSpinner();
@@ -117,7 +103,7 @@ async function main(): Promise<number> {
       return 0;
     case "models": {
       const models = await listAvailable();
-      if (!models.length) fail((await import("./models.ts")).NO_KEY_MESSAGE);
+      if (!models.length) fail(NO_KEY_MESSAGE);
       for (const m of models) console.log(m.spec);
       return 0;
     }
