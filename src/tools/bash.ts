@@ -3,6 +3,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolFactory } from "../types.ts";
 import { capTail } from "../util/truncate.ts";
+import { DENIED_MESSAGE } from "../approval.ts";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const OUTPUT_CAP = 5_000;
@@ -10,7 +11,6 @@ const OUTPUT_CAP = 5_000;
 const BUFFER_MAX = 50_000;
 const BUFFER_KEEP = 20_000;
 
-export const DENIED = "User denied this action. Ask them how to proceed.";
 export const READONLY_BASH =
   "Refused: this session is read-only. Only safe read commands run (ls, pwd, cat, head, tail, wc, which, echo, git status/log/diff/show, with no pipes, redirects or chaining). Tell the user what you would run instead.";
 
@@ -151,7 +151,7 @@ export const createBashTool: ToolFactory = (ctx) =>
             summary: command,
             alwaysKey: `bash:${command}`,
           });
-          if (verdict === "deny") return DENIED;
+          if (verdict === "deny") return DENIED_MESSAGE;
           if (verdict === "readonly") return READONLY_BASH;
         }
         if (options?.abortSignal?.aborted) return "Aborted before running (the user cancelled this turn).";

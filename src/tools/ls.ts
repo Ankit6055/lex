@@ -3,7 +3,7 @@ import { z } from "zod";
 import { glob, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ToolFactory } from "../types.ts";
-import { fileError, resolveInRoot, toRel } from "./read.ts";
+import { fileError, resolveInRoot, toRel } from "../util/fs.ts";
 
 export const LS_MAX_ENTRIES = 200;
 export const IGNORED_DIRS = new Set(["node_modules", ".git", "dist"]);

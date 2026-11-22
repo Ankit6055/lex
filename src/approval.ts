@@ -1,5 +1,17 @@
 import type { ApprovalMode, ApprovalRequest, ApprovalResult, Approver, IO } from "./types.ts";
 
+/** What a tool returns when the user says no. */
+export const DENIED_MESSAGE = "User denied this action. Ask them how to proceed.";
+
+/** Message for a refused mutation, or undefined when the approver allowed it. */
+export function refusalMessage(result: ApprovalResult, rel: string): string | undefined {
+  if (result === "deny") return DENIED_MESSAGE;
+  if (result === "readonly") {
+    return `The session is in read-only mode, so ${rel} was not changed. Don't retry; describe the change you would make and let the user apply it or switch modes.`;
+  }
+  return undefined;
+}
+
 /** Commands that only read, allowed without asking (exact first-token match). */
 const SAFE_COMMANDS = new Set(["ls", "pwd", "cat", "head", "tail", "wc", "which", "echo"]);
 /** `git <subcommand>` forms that only read. */

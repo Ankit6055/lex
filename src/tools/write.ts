@@ -2,30 +2,10 @@ import { tool } from "ai";
 import { z } from "zod";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ApprovalResult, ToolFactory } from "../types.ts";
-import { fileError, resolveInRoot } from "./read.ts";
-
-// ---- serialize file mutations (shared by write and edit) ----
-
-let queue: Promise<unknown> = Promise.resolve();
-
-/** Run `fn` after every previously queued mutation has finished, one at a time. */
-export function serialize<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(fn, fn);
-  queue = run.catch(() => {});
-  return run;
-}
-
-export const DENIED_MESSAGE = "User denied this action. Ask them how to proceed.";
-
-/** Message for a refused mutation, or undefined when the approver allowed it. */
-export function refusalMessage(result: ApprovalResult, rel: string): string | undefined {
-  if (result === "deny") return DENIED_MESSAGE;
-  if (result === "readonly") {
-    return `The session is in read-only mode, so ${rel} was not changed. Don't retry; describe the change you would make and let the user apply it or switch modes.`;
-  }
-  return undefined;
-}
+import type { ToolFactory } from "../types.ts";
+import { refusalMessage } from "../approval.ts";
+import { serialize } from "../util/serialize.ts";
+import { fileError, resolveInRoot } from "../util/fs.ts";
 
 export function countLines(s: string): number {
   if (s.length === 0) return 0;

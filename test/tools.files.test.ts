@@ -6,7 +6,8 @@ import type { ApprovalRequest, ApprovalResult, Approver, IO, ToolContext } from 
 import { createReadTool } from "../src/tools/read.ts";
 import { createLsTool } from "../src/tools/ls.ts";
 import { createGrepTool, makeGrepTool, hasRipgrep, globToRegExp } from "../src/tools/grep.ts";
-import { createWriteTool, serialize } from "../src/tools/write.ts";
+import { createWriteTool } from "../src/tools/write.ts";
+import { serialize } from "../src/util/serialize.ts";
 import { createEditTool } from "../src/tools/edit.ts";
 
 // ---- fakes ----

@@ -3,8 +3,9 @@ import { z } from "zod";
 import { readFile, writeFile } from "node:fs/promises";
 import pc from "picocolors";
 import type { ToolFactory } from "../types.ts";
-import { fileError, resolveInRoot } from "./read.ts";
-import { refusalMessage, serialize } from "./write.ts";
+import { fileError, resolveInRoot } from "../util/fs.ts";
+import { refusalMessage } from "../approval.ts";
+import { serialize } from "../util/serialize.ts";
 
 const DIFF_MAX_LINES = 40;
 

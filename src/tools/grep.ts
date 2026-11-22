@@ -4,7 +4,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { ToolContext, ToolFactory } from "../types.ts";
-import { fileError, looksBinary, resolveInRoot, toRel } from "./read.ts";
+import { fileError, looksBinary, resolveInRoot, toRel } from "../util/fs.ts";
 import { IGNORED_DIRS } from "./ls.ts";
 
 export const GREP_MAX_MATCHES = 50;
