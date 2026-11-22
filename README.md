@@ -142,6 +142,7 @@ bun test test/properties.test.ts  # property tests only
 bun check              # type check
 bun run build          # bundle to dist/cli.js for Node 22+
 bash scripts/smoke.sh  # pack, clean-room install under Node, run it
+bash scripts/smoke.sh --live  # also verify a read-only turn with a configured provider key
 bun src/cli.ts         # run from source
 ```
 

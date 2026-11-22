@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clean-room smoke test: pack the package, install it into a throwaway prefix, and run it under Node.
-# Usage: bash scripts/smoke.sh          (the live prompt runs only if a provider key is available)
+# Usage: bash scripts/smoke.sh [--live]
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,6 +8,10 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/lex-smoke.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 pass() { printf '\033[32m✓\033[0m %s\n' "$1"; }
 fail() { printf '\033[31m✗ %s\033[0m\n' "$1"; exit 1; }
+
+if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != "--live" ]; }; then
+  fail "Usage: bash scripts/smoke.sh [--live]"
+fi
 
 command -v node >/dev/null || fail "node is not installed"
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
@@ -31,18 +35,29 @@ pass "lex --version → $version"
 "$lex" --help | grep -q "Providers" || fail "--help is missing the providers section"
 pass "lex --help"
 
-# Live prompt (read-only, in a throwaway copy of the toy repo). Needs a key from the env or .env.local.
-if [ -z "${AI_GATEWAY_API_KEY:-}${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ] && [ -f "$repo/.env.local" ]; then
-  set -a; . "$repo/.env.local"; set +a
-fi
-if [ -n "${AI_GATEWAY_API_KEY:-}${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ]; then
-  cp -R "$repo/examples/toy-repo" "$work/toy"
-  out="$(cd "$work/toy" && "$lex" --readonly --max-steps 6 "How many test files are in the test/ directory? Answer with just the number." 2>&1)" \
-    || fail "one-shot prompt failed: $out"
-  echo "$out" | grep -q "2" || fail "unexpected answer: $out"
-  pass "one-shot prompt against examples/toy-repo ($(echo "$out" | tail -1))"
-else
-  printf '\033[33m- skipped live prompt (no API key set)\033[0m\n'
+# The live check uses a new project and an unpredictable value to verify a real read round trip.
+if [ "${1:-}" = "--live" ]; then
+  mkdir "$work/project" "$work/config"
+  probe="lex-smoke-$(basename "$work")"
+  printf '%s\n' "$probe" > "$work/project/probe.txt"
+  if ! bun -e '
+    const [lex, project, config] = process.argv.slice(1);
+    const child = Bun.spawn([
+      lex, "--readonly", "--max-steps", "4", "--cwd", project,
+      "Use the read tool on probe.txt. Reply with exactly its contents, with no formatting.",
+    ], {
+      cwd: project, env: { ...process.env, LEX_HOME: config, NO_COLOR: "1" },
+      stdin: "ignore", stdout: "inherit", stderr: "inherit",
+      timeout: 45_000,
+    });
+    process.exit(await child.exited);
+  ' "$lex" "$work/project" "$work/config" > "$work/live.out" 2> "$work/live.err"; then
+    cat "$work/live.err" >&2
+    fail "live provider request failed"
+  fi
+  [ "$(cat "$work/live.out")" = "$probe" ] || fail "live provider returned an incorrect probe value"
+  grep -Fq '● read probe.txt' "$work/live.err" || fail "live provider did not use the read tool"
+  pass "live provider streamed the expected value after reading probe.txt"
 fi
 
 pass "smoke test passed"
