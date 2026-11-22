@@ -1,18 +1,27 @@
 {
-  "name": "lex",
-  "module": "index.ts",
+  "name": "lexcode",
+  "version": "0.0.1",
+  "description": "A minimal, open-source, model-agnostic AI coding harness for your terminal",
   "type": "module",
-  "private": true,
+  "bin": { "lexcode": "dist/cli.js" },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "bun --watch index.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "dev": "bun src/cli.ts",
+    "build": "bun build src/cli.ts --target=node --outfile dist/cli.js && chmod +x dist/cli.js",
+    "test": "bun test",
+    "typecheck": "bun check",
+    "prepublishOnly": "bun run typecheck && bun test && bun run build"
   },
+  "keywords": ["ai", "agent", "harness", "coding-agent", "cli", "ai-sdk", "llm"],
+  "license": "MIT",
   "devDependencies": {
+    "@ai-sdk/anthropic": "^4.0.107",
+    "@ai-sdk/openai": "^4.0.122",
     "@types/bun": "latest",
-    "typescript": "^7.0.2"
-  },
-  "peerDependencies": {
-    "typescript": "^7"
+    "ai": "^7.0.179",
+    "picocolors": "^1.1.1",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.7"
   }
 }
