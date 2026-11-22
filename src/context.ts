@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { PromptContext } from "./types.ts";
 import { capChars } from "./util/truncate.ts";
+import { discoverSkills } from "./skills.ts";
 
 export const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md", "LEX.md"] as const;
 export const MAX_INSTRUCTION_CHARS = 8000;
@@ -81,9 +82,10 @@ export async function loadContext(root: string): Promise<Omit<PromptContext, "to
   ]);
   // git prints the real toplevel path, so compare against the real root (macOS /var -> /private/var).
   const realRoot = await realpath(root).catch(() => root);
-  const [projectInstructions, memoryRaw] = await Promise.all([
+  const [projectInstructions, memoryRaw, skills] = await Promise.all([
     findProjectInstructions(searchDirs(realRoot, gitRoot)),
     readIfExists(path.join(root, ".lex", "memory.md")),
+    discoverSkills(root).catch(() => []),
   ]);
   const memory = memoryRaw?.trim() || undefined;
 
@@ -91,5 +93,6 @@ export async function loadContext(root: string): Promise<Omit<PromptContext, "to
   if (gitBranch) ctx.gitBranch = gitBranch;
   if (projectInstructions) ctx.projectInstructions = projectInstructions;
   if (memory) ctx.memory = memory;
+  if (skills.length) ctx.skills = skills.map(({ name, description }) => ({ name, description }));
   return ctx;
 }

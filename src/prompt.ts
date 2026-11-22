@@ -28,6 +28,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   // 3. Tools
   const tools = ["# Tools", `Available: ${ctx.toolNames.join(", ")}.`];
   if (has("bash")) tools.push("Prefer read/grep/ls over bash for exploring and reading files.");
+  if (has("task")) tools.push("For broad questions that need many searches and reads, delegate to `task` (a read-only explorer) to keep your context small.");
   sections.push(tools.join("\n"));
 
   // 4. Handling ambiguity

@@ -39,9 +39,10 @@ export async function createSession(o: {
   maxSteps?: number;
 }): Promise<Session> {
   const memoryPath = path.join(o.root, ".lex", "memory.md");
-  const makeTools = () => buildTools({ root: o.root, approver: o.approver, io: o.io, memoryPath });
-  let tools = makeTools();
   let model = await resolveModel(o.model);
+  // `task` gets a getter, so its explorer follows `/model` swaps.
+  const makeTools = () => buildTools({ root: o.root, approver: o.approver, io: o.io, memoryPath }, { getModel: () => model });
+  let tools = makeTools();
   const messages: ModelMessage[] = [];
   const totals: SessionTotals = { turns: 0, steps: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0, ms: 0 };
 
