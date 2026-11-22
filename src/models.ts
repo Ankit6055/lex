@@ -19,10 +19,10 @@ const SHORTLIST: Record<ProviderId, string[]> = {
   openai: ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra"],
 };
 
-export const NO_KEY_MESSAGE = `No API key found. Lexcode is bring-your-own-key. Set one of:
+export const NO_KEY_MESSAGE = `No API key found. Lex is bring-your-own-key. Set one of:
   AI_GATEWAY_API_KEY   (recommended: one key, every model. vercel.com/ai-gateway)
   ANTHROPIC_API_KEY    OPENAI_API_KEY
-or run: lexcode login`;
+or run: lex login`;
 
 export class ModelError extends Error {
   override name = "ModelError";
@@ -115,12 +115,12 @@ export function closeMatches(query: string, candidates: string[], n = 5): string
 }
 
 /**
- * Resolution order: spec arg (--model) → LEXCODE_MODEL → config.json defaultModel →
+ * Resolution order: spec arg (--model) → LEX_MODEL → config.json defaultModel →
  * first provider with a key (gateway → anthropic → openai).
  */
 export async function resolveModel(spec?: string): Promise<ResolvedModel> {
   const keys = await keysPresent();
-  const chosen = spec || process.env.LEXCODE_MODEL || (await readConfig()).defaultModel;
+  const chosen = spec || process.env.LEX_MODEL || (await readConfig()).defaultModel;
   let provider: ProviderId, id: string;
   if (chosen) {
     ({ provider, id } = parseSpec(chosen, (p) => !!keys[p]));
@@ -134,7 +134,7 @@ export async function resolveModel(spec?: string): Promise<ResolvedModel> {
   if (!apiKey) {
     throw new ModelError(
       PROVIDERS.some((p) => keys[p])
-        ? `No ${provider} key. Set ${ENV_VARS[provider]} or run: lexcode login`
+        ? `No ${provider} key. Set ${ENV_VARS[provider]} or run: lex login`
         : NO_KEY_MESSAGE,
     );
   }

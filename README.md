@@ -1,4 +1,4 @@
-# lexcode
+# lex
 
 A minimal, open-source AI coding harness you can read in an afternoon.
 Model, tools, memory, loop. Bring your own key: no OAuth, no account, your credits.
@@ -34,7 +34,7 @@ src/
   cli.ts       args, subcommands, one-shot mode
   agent.ts     ToolLoopAgent + streaming turn runner (the whole loop)
   models.ts    gateway | anthropic | openai spec parsing and resolution
-  auth.ts      BYO keys: env first, then ~/.lexcode/auth.json (0600)
+  auth.ts      BYO keys: env first, then ~/.lex/auth.json (0600)
   prompt.ts    system prompt builder (pure)
   context.ts   AGENTS.md / CLAUDE.md discovery, git branch, memory
   approval.ts  ask | yolo | readonly, operator-aware safe-command list

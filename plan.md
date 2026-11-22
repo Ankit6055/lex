@@ -1,8 +1,8 @@
-# Lexcode: Build Plan (3 hours)
+# Lex: Build Plan (3 hours)
 
 > An open-source, local AI coding harness you can read in an afternoon.
 > Swap the model with one flag, and run the same task on two models side by side.
-> Install with `npx lexcode`.
+> Install with `npx @ankit6055/lex`.
 
 References:
 - [Vercel Academy, Build an AI Agent Harness](https://vercel.com/academy/build-ai-agent-harness). This plan keeps the harness modules and leaves out every sandbox module (see §10).
@@ -14,48 +14,48 @@ References:
 
 ## 1. What we're building
 
-The brief describes a harness as "the tools it can call, the context it sees, its memory and the loop that keeps it working." Lexcode is that and no more:
+The brief describes a harness as "the tools it can call, the context it sees, its memory and the loop that keeps it working." Lex is that and no more:
 
-| Harness part | In Lexcode |
+| Harness part | In Lex |
 |---|---|
 | **Model** | Three providers, each with your own key: **AI Gateway** (any model it serves, e.g. `gateway:anthropic/claude-sonnet-5-5`, `gateway:openai/gpt-6.2-sol`, `gateway:zai/glm-5.3`), **Anthropic** direct, and **OpenAI** direct. Pick with `--model`, or switch mid-session with `/model`. |
 | **Loop** | AI SDK `ToolLoopAgent`, run in a multi-turn REPL that streams output. |
 | **Tools** | `read`, `ls`, `grep`, `write`, `edit`, `bash`, `todo`, `ask_user`, `remember` (plus `load_skill` and `task` as stretch goals). |
 | **Context** | A system prompt built at runtime from the cwd, git branch, tool list, `AGENTS.md`/`CLAUDE.md`, and memory. Tool output is capped and old tool results are pruned. |
-| **Memory** | `.lexcode/memory.md` in the project. The agent writes to it with `remember`, and it is loaded into the prompt every session. |
+| **Memory** | `.lex/memory.md` in the project. The agent writes to it with `remember`, and it is loaded into the prompt every session. |
 | **Safety (no sandbox)** | File tools can't leave the project root. `bash`, `write` and `edit` ask y/n/always before running. Modes: `--yolo` and `--readonly`. |
-| **Showcase** | `lexcode compare --models a,b "task"` runs one task on two models, each in its own temp copy of the repo. It prints steps, tokens, time and the diff for each. |
+| **Showcase** | `lex compare --models a,b "task"` runs one task on two models, each in its own temp copy of the repo. It prints steps, tokens, time and the diff for each. |
 
-**Distribution:** an npm package, `lexcode`, built to plain Node ESM so judges can run it without Bun:
+**Distribution:** an npm package, `lex`, built to plain Node ESM so judges can run it without Bun:
 ```bash
-npx lexcode            # or: npm i -g lexcode && lexcode
+npx @ankit6055/lex            # or: npm i -g @ankit6055/lex && lex
 ```
 
 ---
 
 ## 2. Key decisions (made up front so we don't debate them mid-build)
 
-1. **Package name `lexcode`, bin name `lexcode`.** `lex` is already taken on npm, and `/usr/bin/lex` (the lexer generator) already exists on macOS and Linux. `lexcode` and `lex-code` were both free when checked. **Claim the name in the first 15 minutes.**
+1. **Product name `lex`, npm package `@ankit6055/lex`, bin name `lex`.** The unscoped `lex` is taken on npm (a JS lexer), so we publish scoped. `/usr/bin/lex` (the lexer generator) exists on macOS and Linux, and a global install of our `lex` bin shadows it; this was accepted on 2026-11-22. Config lives in `~/.lex/`, project state in `.lex/`, env vars are `LEX_*`.
 2. **Develop with Bun, ship for Node.** `bun build src/cli.ts --target=node` produces `dist/cli.js` with a `#!/usr/bin/env node` shebang.
    - ⚠️ **This overrides CLAUDE.md for runtime code only.** Code under `src/` must not use `Bun.file`, `Bun.$` or `Bun.serve`, because judges may run it on Node. Use `node:fs/promises`, `node:child_process`, `node:readline`. Bun stays the dev, test and build tool.
    - Require `engines.node >= 22`. That gives us `fs.promises.glob` and stable `parseArgs`.
 3. **AI SDK v7** (`ai@7.0.x`, which is `latest` on npm) with `@ai-sdk/anthropic` and `@ai-sdk/openai` pinned at `4.0.x`. AI Gateway comes from the `gateway` provider (`@ai-sdk/gateway`, which `ai` re-exports, so check that) and reads `AI_GATEWAY_API_KEY`. Use `ToolLoopAgent`, `tool()`, `isStepCount`, `pruneMessages`, `prepareStep` and `agent.stream()`, as the course does. **Check every API name against `node_modules/ai` before writing code**, since the course might lag the SDK.
 4. **Approval is gated inside `execute`, not through the SDK's `toolApproval`.** We're an interactive CLI, so `execute` can `await` a readline prompt while the stream waits. That is simpler than the approval-request/response round trip, and `ask_user` gets a real pause the same way. (The course only fakes it with "Awaiting user response".)
 5. **No TUI framework.** Use `node:readline`, `picocolors` and our own small renderer. Ink or a markdown renderer would cost an hour we don't have.
-6. **Bring your own key, no OAuth, three providers.** Keys come from env vars or from `lexcode login`, which asks for a key and saves it to `~/.lexcode/auth.json` with mode `0600` (pi's `auth.json` pattern, API keys only). With no key, the first run prints a 3-line message saying which key to get. **AI Gateway is the recommended path for judges**: one key, every model, and it makes `compare` across labs trivial. Google, OpenRouter, Ollama and OAuth logins are out of scope for v1.
+6. **Bring your own key, no OAuth, three providers.** Keys come from env vars or from `lex login`, which asks for a key and saves it to `~/.lex/auth.json` with mode `0600` (pi's `auth.json` pattern, API keys only). With no key, the first run prints a 3-line message saying which key to get. **AI Gateway is the recommended path for judges**: one key, every model, and it makes `compare` across labs trivial. Google, OpenRouter, Ollama and OAuth logins are out of scope for v1.
 
 ---
 
 ## 3. Architecture
 
 ```
-lexcode/
+lex/
 ├── src/
 │   ├── cli.ts            # parseArgs, subcommands (chat | run | compare | login | models), SIGINT
 │   ├── repl.ts           # multi-turn loop, slash commands, message history
 │   ├── agent.ts          # createAgent({ model, tools, ctx }) -> ToolLoopAgent
 │   ├── models.ts         # gateway | anthropic | openai, spec parsing, resolution, listAvailable
-│   ├── auth.ts           # BYO keys: env first, then ~/.lexcode/auth.json (0600); login flow
+│   ├── auth.ts           # BYO keys: env first, then ~/.lex/auth.json (0600); login flow
 │   ├── prompt.ts         # buildSystemPrompt(ctx): pure, unit tested
 │   ├── context.ts        # discover AGENTS.md/CLAUDE.md, git branch, memory file
 │   ├── approval.ts       # mode (ask | yolo | readonly) + session "always" set
@@ -93,7 +93,7 @@ user input ─► repl.ts pushes {role:"user"} onto messages
 ### 4.1 Model layer: `models.ts` and `auth.ts` (what makes the model swappable)
 **Providers (v1):**
 
-| Provider key | Package | Key (env, or `~/.lexcode/auth.json`) | Model id format | Default |
+| Provider key | Package | Key (env, or `~/.lex/auth.json`) | Model id format | Default |
 |---|---|---|---|---|
 | `gateway` | `gateway` from `ai` / `@ai-sdk/gateway` | `AI_GATEWAY_API_KEY` | `creator/model`, e.g. `anthropic/claude-sonnet-5-5`, `openai/gpt-6.2-sol`, `zai/glm-5.3` | `anthropic/claude-sonnet-5-5` |
 | `anthropic` | `@ai-sdk/anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-haiku-5-5` | `claude-sonnet-5-5` |
@@ -107,15 +107,15 @@ Confirm the default IDs at 0:00 against the provider docs or `gateway.getAvailab
 - A bare id without `/`, such as `claude-opus-5-5`, goes to whichever direct provider owns that prefix (`claude-` is Anthropic, `gpt-`/`o` is OpenAI) if its key exists, and otherwise to the gateway with the creator prefix added.
 - Fuzzy matching (`sonnet` → the latest Sonnet) is stretch. If a spec doesn't resolve, print the close matches.
 
-**Resolution order:** `--model` flag, then `LEXCODE_MODEL` env, then `~/.lexcode/config.json` `defaultModel`, then the first provider with a key, in the order **gateway → anthropic → openai**. If there's no key at all, print:
+**Resolution order:** `--model` flag, then `LEX_MODEL` env, then `~/.lex/config.json` `defaultModel`, then the first provider with a key, in the order **gateway → anthropic → openai**. If there's no key at all, print:
 ```
-No API key found. Lexcode is bring-your-own-key. Set one of:
+No API key found. Lex is bring-your-own-key. Set one of:
   AI_GATEWAY_API_KEY   (recommended: one key, every model. vercel.com/ai-gateway)
   ANTHROPIC_API_KEY    OPENAI_API_KEY
-or run: lexcode login
+or run: lex login
 ```
 
-**`auth.ts`:** `getKey(provider)` checks env first, then `~/.lexcode/auth.json` (`{ "gateway": { "type": "api_key", "key": "..." } }`, written with mode `0600`, the same shape as pi). `saveKey(provider, key)` is used by `lexcode login` and `/login`, which ask which of the 3 providers and then take the key as masked input. Keys are passed to providers explicitly (`createAnthropic({ apiKey })`, `createOpenAI({ apiKey })`, `createGateway({ apiKey })`) and **never printed or logged**.
+**`auth.ts`:** `getKey(provider)` checks env first, then `~/.lex/auth.json` (`{ "gateway": { "type": "api_key", "key": "..." } }`, written with mode `0600`, the same shape as pi). `saveKey(provider, key)` is used by `lex login` and `/login`, which ask which of the 3 providers and then take the key as masked input. Keys are passed to providers explicitly (`createAnthropic({ apiKey })`, `createOpenAI({ apiKey })`, `createGateway({ apiKey })`) and **never printed or logged**.
 
 **`listAvailable()` powers `/model`:** a static shortlist for Anthropic and OpenAI, plus the live list from `gateway.getAvailableModels()` when a gateway key is present (cache it for the session; on failure fall back to a shortlist). `/model` with no args prints the current model and a numbered list. `/model <spec>` switches.
 
@@ -149,7 +149,7 @@ Every tool follows the course's **description contract**: WHEN TO USE / WHEN NOT
 | `bash` | `command`, `timeout_ms?` | `spawn(cmd, { shell: true, cwd })`, 60s default timeout, returns `exit N` + output | **last** 5,000 chars (errors show up at the end) | auto-allow safe list, otherwise **ask** |
 | `todo` | `action: add\|start\|complete\|list`, `description?`, `id?` | In memory, only one item `in_progress` at a time, re-rendered as a checklist after each change | n/a | none |
 | `ask_user` | `question`, `options[2..4]` | **Actually blocks** on a readline numbered choice (or free text) and returns the answer | n/a | none |
-| `remember` | `fact` | Appends `- (YYYY-MM-DD) fact` to `.lexcode/memory.md` | file kept at 4k chars or less | none |
+| `remember` | `fact` | Appends `- (YYYY-MM-DD) fact` to `.lex/memory.md` | file kept at 4k chars or less | none |
 | `load_skill` *(stretch)* | `name` | Loads `skills/<name>/SKILL.md` on demand. Only names and descriptions go in the prompt | 4,000 chars | none |
 | `task` *(stretch)* | `description` | Runs an explorer subagent with read-only tools (`read`, `ls`, `grep`) on a cheap model, `isStepCount(8)`, and returns a summary string | summary only | none |
 
@@ -163,24 +163,24 @@ Every tool follows the course's **description contract**: WHEN TO USE / WHEN NOT
 
 ### 4.5 Context and system prompt: `prompt.ts` and `context.ts`
 `buildSystemPrompt(ctx)` is a pure function that builds a `sections[]` array and joins it:
-1. Identity: "You are Lexcode, a coding agent working in `<cwd>` on `<os>`." Plus the date and git branch (if any).
+1. Identity: "You are Lex, a coding agent working in `<cwd>` on `<os>`." Plus the date and git branch (if any).
 2. `# Agency`: act, don't explain. Search before creating. Make minimal changes. Read before editing. Run tests or typecheck after changes if the project has them.
 3. `# Tools`: the available tool names, plus "prefer read/grep over bash for files."
 4. `# Handling ambiguity`: search, then ask (`ask_user`), then act.
 5. `# Planning`: use `todo` for tasks with 3 or more steps.
-6. `# Project instructions`: the first match among `AGENTS.md`, `CLAUDE.md`, `LEXCODE.md`, searched in cwd and then up to the git root (capped at 8k chars).
-7. `# Memory`: the contents of `.lexcode/memory.md`, plus "use `remember` for durable facts (commands, conventions, user preferences)."
+6. `# Project instructions`: the first match among `AGENTS.md`, `CLAUDE.md`, `LEX.md`, searched in cwd and then up to the git root (capped at 8k chars).
+7. `# Memory`: the contents of `.lex/memory.md`, plus "use `remember` for durable facts (commands, conventions, user preferences)."
 8. `# Skills` *(stretch)*: one line per skill.
 
 Context budget: tool caps (prevention) plus `pruneMessages` (cleanup), with a token meter in the footer. Anthropic prompt caching on the system prompt is P2.
 
 ### 4.6 Surface: `cli.ts`, `repl.ts`, `render.ts`
 ```
-lexcode                          # interactive REPL in cwd
-lexcode "fix the failing test"   # one-shot: run, print, exit (pipe-friendly)
-lexcode compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add input validation to src/api.ts"
-lexcode login                    # pick gateway | anthropic | openai, paste key -> ~/.lexcode/auth.json (0600)
-lexcode models                   # list models available with your keys
+lex                          # interactive REPL in cwd
+lex "fix the failing test"   # one-shot: run, print, exit (pipe-friendly)
+lex compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add input validation to src/api.ts"
+lex login                    # pick gateway | anthropic | openai, paste key -> ~/.lex/auth.json (0600)
+lex models                   # list models available with your keys
 Flags: --model, --yolo, --readonly, --cwd, --max-steps, --version, --help
 ```
 - **Rendering:** text deltas go to stdout. Tool lines go to stderr, dimmed, one per call, with a per-tool summary:
@@ -191,7 +191,7 @@ Flags: --model, --yolo, --readonly, --cwd, --max-steps, --version, --help
 - **Banner:** name, version, model, cwd, project-instructions file found (yes/no), memory entries count.
 
 ### 4.7 Compare: `compare.ts` (the brief's "same task on two models")
-1. For each model: `fs.cp(cwd, tmpdir/lexcode-<model>, { filter: skip node_modules/.git/dist })`, then `git init && git add -A && git commit` inside the copy so the diff is clean.
+1. For each model: `fs.cp(cwd, tmpdir/lex-<model>, { filter: skip node_modules/.git/dist })`, then `git init && git add -A && git commit` inside the copy so the diff is clean.
 2. Run the agent headless in that copy with `yolo` approval (it's a throwaway copy) and a step cap. Run the models in parallel with `Promise.all`, and buffer each one's output.
 3. Print a table: model | steps | tool calls | tokens in/out | wall time | finished? Then each model's final message and its `git diff --stat` (`--diff` for the full diff).
 4. Print the temp paths so judges can inspect them.
@@ -234,10 +234,10 @@ Parallel agents can share one working tree, since the file-ownership rule preven
 ---
 
 ### Phase 0: Foundation and contracts *(Wave 0 · 1 agent · about 20 min · blocks everything)*
-**Goal:** a skeleton that type-checks, builds to Node, and is published as `lexcode@0.0.1`, with shared contracts frozen so Wave 1 agents can work without coordinating.
+**Goal:** a skeleton that type-checks, builds to Node, and is published as `@ankit6055/lex@0.0.1`, with shared contracts frozen so Wave 1 agents can work without coordinating.
 
 **Tasks**
-- `git init`, `.gitignore` (`node_modules`, `dist`, `.lexcode/`), MIT `LICENSE`.
+- `git init`, `.gitignore` (`node_modules`, `dist`, `.lex/`), MIT `LICENSE`.
 - `bun add ai @ai-sdk/anthropic @ai-sdk/openai zod picocolors`. Add `@ai-sdk/gateway` only if `ai` doesn't re-export `gateway`/`createGateway`.
 - Update `package.json` to the shape in §6: remove `private` and `peerDependencies`, add `bin`, `files`, `engines`, scripts.
 - **Check the AI SDK v7 API** in `node_modules/ai`: `ToolLoopAgent` options (`instructions`, `stopWhen`, `prepareStep`, `onStepEnd`), `isStepCount`, `pruneMessages`, `tool()` (`inputSchema`), `agent.stream({ messages, abortSignal })`, and the chunk type names (`text-delta`, `tool-call`, `tool-result`, `finish`). Record the real names in `docs/ai-sdk-notes.md` (around 20 lines) for the other agents.
@@ -245,7 +245,7 @@ Parallel agents can share one working tree, since the file-ownership rule preven
 - Implement `src/util/truncate.ts` and `src/util/paths.ts` with their tests. They're small and pure, and every other phase uses them.
 - Create stub files for every module in §3 that export the agreed signatures and `throw new Error("TODO")`, so imports resolve from the start.
 - `src/cli.ts` stub: shebang, `--version`, `--help`.
-- `bun run build`, `npm pack`, install the tarball globally under Node, run `lexcode --version`. **`npm publish --access public` as `0.0.1`.** You'll need npm login and OTP, so do this one yourself.
+- `bun run build`, `npm pack`, install the tarball globally under Node, run `lex --version`. **`npm publish --access public` as `0.0.1`.** You'll need npm login and OTP, so do this one yourself.
 
 **Contract: `src/types.ts`**
 ```ts
@@ -281,7 +281,7 @@ export interface ToolContext {
   root: string;          // realpath of project root; all file access is confined here
   approver: Approver;
   io: IO;
-  memoryPath: string;    // <root>/.lexcode/memory.md
+  memoryPath: string;    // <root>/.lex/memory.md
 }
 export type ToolFactory = (ctx: ToolContext) => Tool;
 
@@ -320,7 +320,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 // util/truncate  capLines(s, n, hint?) / capChars(s, n) / capTail(s, n)
 ```
 
-**Acceptance:** `bun check` is clean, `bun test` passes (paths and truncate), `lexcode@0.0.1` is on npm, and `npx lexcode --version` works under Node.
+**Acceptance:** `bun check` is clean, `bun test` passes (paths and truncate), `@ankit6055/lex@0.0.1` is on npm, and `npx @ankit6055/lex --version` works under Node.
 
 ---
 
@@ -328,7 +328,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 **Owns:** `src/models.ts`, `src/auth.ts`, `src/agent.ts`, `src/render.ts`, `src/cli.ts`
 **Spec:** §4.1, §4.2, the rendering part of §4.6.
 **Tasks**
-- `auth.ts`: `getKey(provider)` (env first, then `~/.lexcode/auth.json`), `saveKey` (mode `0600`), and the `login` flow (choose from 3 providers, masked key input through `IO`). **API keys only, no OAuth.** Never log keys.
+- `auth.ts`: `getKey(provider)` (env first, then `~/.lex/auth.json`), `saveKey` (mode `0600`), and the `login` flow (choose from 3 providers, masked key input through `IO`). **API keys only, no OAuth.** Never log keys.
 - `models.ts`: **only `gateway`, `anthropic`, `openai`**. Parse the spec grammar from §4.1 (`provider:id`, a bare id with `/` → gateway, a bare `claude-*`/`gpt-*` → direct provider if its key exists, otherwise gateway). Build providers lazily with explicit `apiKey`. Apply the resolution order gateway → anthropic → openai. Print the no-key message from §4.1. `listAvailable()` uses `gateway.getAvailableModels()` when a gateway key exists, plus static shortlists. Fill in `DEFAULTS` with **verified** IDs.
 - `cli.ts` subcommands: `login` and `models`, in addition to chat, one-shot and `compare`.
 - `agent.ts`: `ToolLoopAgent` with `prepareStep` pruning (`before-last-3-messages`), `isStepCount(maxSteps ?? 25)`, a usage meter, abort support. `runTurn` streams and returns response messages plus `TurnUsage`.
@@ -336,7 +336,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 - `cli.ts`: `parseArgs` with `--model`, `--yolo`, `--readonly`, `--cwd`, `--max-steps`, `--version`, `--help`, and positional prompt for one-shot mode. Subcommand dispatch: `compare` goes to `compare.ts` (a stub for now). No prompt goes to `repl.ts` (a stub until Phase 2).
 - Until Phase 1B lands, test with a throwaway inline `read` tool in a scratch file, not in the tools folder.
 
-**Acceptance:** `bun src/cli.ts --model <spec> "list the files here and summarize"` streams for **all three routes**: `gateway:anthropic/claude-sonnet-5-5`, `anthropic:claude-sonnet-5-5`, `openai:gpt-6.2-sol` (whichever keys you have; gateway at minimum). `lexcode login` saves a key that the next run picks up. With no key, the friendly message prints. A bad spec prints close matches. Ctrl-C aborts cleanly.
+**Acceptance:** `bun src/cli.ts --model <spec> "list the files here and summarize"` streams for **all three routes**: `gateway:anthropic/claude-sonnet-5-5`, `anthropic:claude-sonnet-5-5`, `openai:gpt-6.2-sol` (whichever keys you have; gateway at minimum). `lex login` saves a key that the next run picks up. With no key, the friendly message prints. A bad spec prints close matches. Ctrl-C aborts cleanly.
 
 ### Phase 1B: File tools *(Wave 1 · about 45 min)*
 **Owns:** `src/tools/read.ts`, `ls.ts`, `grep.ts`, `write.ts`, `edit.ts`, plus `test/tools.files.test.ts`
@@ -357,7 +357,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 - `io.ts`: **one** shared `readline` interface, `confirm`/`choose`/`prompt`, a spinner that `withPaused` stops, and handling for when stdin isn't a TTY (deny by default and say so).
 - `approval.ts`: the three modes, the session `always` set, and `isSafeCommand` (exact first token plus allowlist, **rejecting** `; && || | > < $( \``).
 - `bash.ts`: `spawn(cmd, { shell: true, cwd: root })`, timeout and kill, merged stdout and stderr, `exit N` header, `capTail(5000)`. Safe commands skip approval.
-- `todo.ts`: in-memory list, a single item in progress, returns a rendered checklist. `ask.ts`: blocks through `io.choose`. `remember.ts`: appends a dated bullet to `memoryPath`, creates `.lexcode/` if needed, and caps the file at 4k chars.
+- `todo.ts`: in-memory list, a single item in progress, returns a rendered checklist. `ask.ts`: blocks through `io.choose`. `remember.ts`: appends a dated bullet to `memoryPath`, creates `.lex/` if needed, and caps the file at 4k chars.
 
 **Acceptance:** tests show that `git status && rm -rf x` needs approval, `catx` isn't treated as safe, readonly refuses, a bash timeout works, the single-active todo rule holds, and `remember` appends to the file.
 
@@ -366,7 +366,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 **Spec:** §4.5.
 **Tasks**
 - `buildSystemPrompt`: pure, builds `sections[]`, includes every section from §4.5, and leaves out optional sections when their data is missing.
-- `loadContext`: git branch (`git rev-parse --abbrev-ref HEAD`, ignored if it fails), the first match among `AGENTS.md`, `CLAUDE.md`, `LEXCODE.md` from cwd up to the git root (capped at 8k chars), `.lexcode/memory.md` if it exists, OS, and date.
+- `loadContext`: git branch (`git rev-parse --abbrev-ref HEAD`, ignored if it fails), the first match among `AGENTS.md`, `CLAUDE.md`, `LEX.md` from cwd up to the git root (capped at 8k chars), `.lex/memory.md` if it exists, OS, and date.
 - `tools/index.ts`: `buildTools(ctx)` imports every factory and returns `{ read, ls, grep, write, edit, bash, todo, ask_user, remember }`. Factories are stubs until 1B and 1C merge, which is fine.
 
 **Acceptance:** prompt tests (sections appear or are left out correctly), and `loadContext` finds a `CLAUDE.md` one directory up in a test fixture.
@@ -384,29 +384,29 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 - Wire one-shot mode in `cli.ts` to the same `runTurn`.
 - `bun run build`, then do the clean-room install under Node, then **publish `0.1.0`**.
 
-**Acceptance (the MVP demo):** in a toy repo with a failing test, `npx lexcode@0.1.0` fixes it. It asks before `npm test` and before the edit, a "no" is handled gracefully, `/model` switches providers mid-conversation, and `remember` survives a restart.
+**Acceptance (the MVP demo):** in a toy repo with a failing test, `npx @ankit6055/lex@0.1.0` fixes it. It asks before `npm test` and before the edit, a "no" is handled gracefully, `/model` switches providers mid-conversation, and `remember` survives a restart.
 
 ---
 
 ### Phase 3A: Compare mode *(Wave 3 · about 30 min)*
 **Owns:** `src/compare.ts`
 **Spec:** §4.7. Reuses `resolveModel`, `createAgent`, `runTurn`, `buildTools` (with a yolo `Approver` and a silent `IO`), and `loadContext`.
-**Acceptance:** `lexcode compare --models A,B "task"` runs both models in parallel in temp copies, then prints the summary table, each model's final message, `git diff --stat`, and the temp paths. `--diff` prints full diffs. One model failing doesn't sink the other.
+**Acceptance:** `lex compare --models A,B "task"` runs both models in parallel in temp copies, then prints the summary table, each model's final message, `git diff --stat`, and the temp paths. `--diff` prints full diffs. One model failing doesn't sink the other.
 
 ### Phase 3B: Docs, tests, smoke script *(Wave 3 · about 30 min)*
 **Owns:** `README.md`, `test/**` (filling gaps only), `scripts/smoke.sh`, `examples/toy-repo/` (a tiny project with a failing test and an `AGENTS.md`)
-**Tasks:** README from §7, with an architecture diagram and a link to each source file. `smoke.sh` does `npm pack`, installs into a temp prefix under Node, and runs `lexcode --version`, `lexcode --help`, and a one-shot prompt against `examples/toy-repo`.
+**Tasks:** README from §7, with an architecture diagram and a link to each source file. `smoke.sh` does `npm pack`, installs into a temp prefix under Node, and runs `lex --version`, `lex --help`, and a one-shot prompt against `examples/toy-repo`.
 **Acceptance:** `bash scripts/smoke.sh` passes, and the README quickstart works when copied and pasted.
 
 ### Phase 3C: Stretch *(Wave 3 · only if Phase 2 finished by 1:45)*
 **Owns:** `src/tools/task.ts`, `src/tools/skill.ts`, plus a one-line registration each in `tools/index.ts` and `prompt.ts` (coordinate those two edits with whoever runs Phase 4).
-**Tasks:** an explorer subagent (`read`, `ls`, `grep` only, a cheap model, `isStepCount(8)`, returns a summary), and skills discovery and `load_skill` (project `skills/` and then `~/.lexcode/skills/`, progressive disclosure). If there's time: `--continue` session resume.
+**Tasks:** an explorer subagent (`read`, `ls`, `grep` only, a cheap model, `isStepCount(8)`, returns a summary), and skills discovery and `load_skill` (project `skills/` and then `~/.lex/skills/`, progressive disclosure). If there's time: `--continue` session resume.
 
 ---
 
 ### Phase 4: Release and demo *(Wave 4 · 1 agent or you · about 30 min)*
 **Tasks:** merge Wave 3, `bun check`, `bun test`, `scripts/smoke.sh`, bump to `0.2.0`, `npm publish`, push the public GitHub repo, run the demo script in §8 end to end on a clean machine or directory, and record it.
-**Acceptance:** `npx lexcode` (the latest version) runs the full §8 demo.
+**Acceptance:** `npx @ankit6055/lex` (the latest version) runs the full §8 demo.
 
 ---
 
@@ -428,7 +428,7 @@ export interface TurnUsage { steps: number; toolCalls: number; inputTokens: numb
 
 ### 5.8 Brief template for each agent
 ```
-You're building Phase <X> of Lexcode, a minimal open-source AI coding harness (TypeScript, AI SDK v7, ships as an npm CLI for Node 22).
+You're building Phase <X> of Lex, a minimal open-source AI coding harness (TypeScript, AI SDK v7, ships as an npm CLI for Node 22).
 Read plan.md: §5.0 (rules), §5 Phase <X> (your scope), §4.<n> (behavior spec), and docs/ai-sdk-notes.md (verified SDK API names).
 Contracts are in src/types.ts. Don't modify it.
 You own only: <files>. Don't edit anything else; report needed changes instead.
@@ -439,7 +439,7 @@ Finish with: files changed, checks run, open issues.
 ### 5.9 Cut order and stretch
 **Cut order if behind** (cut from the top): Phase 3C entirely → `compare --diff` → spinner → `ls` (fold into `grep`/`bash`) → todo rendering polish. **Never cut:** the approval gate, the path guard, `/model` swap, or publishing.
 
-**Stretch (only if ahead):** `--continue` session resume (`.lexcode/sessions/*.json`) · Anthropic cache control · first-run interactive setup that saves the key to `~/.lexcode/config.json` (chmod 600).
+**Stretch (only if ahead):** `--continue` session resume (`.lex/sessions/*.json`) · Anthropic cache control · first-run interactive setup that saves the key to `~/.lex/config.json` (chmod 600).
 
 ---
 
@@ -448,11 +448,11 @@ Finish with: files changed, checks run, open issues.
 ```jsonc
 // package.json (shape)
 {
-  "name": "lexcode",
+  "name": "@ankit6055/lex",
   "version": "0.1.0",
   "description": "A minimal, open-source, model-agnostic AI coding harness for your terminal",
   "type": "module",
-  "bin": { "lexcode": "dist/cli.js" },
+  "bin": { "lex": "dist/cli.js" },
   "files": ["dist", "README.md", "LICENSE"],
   "engines": { "node": ">=22" },
   "scripts": {
@@ -464,13 +464,13 @@ Finish with: files changed, checks run, open issues.
   },
   "keywords": ["ai", "agent", "harness", "coding-agent", "cli", "ai-sdk", "llm"],
   "license": "MIT",
-  "repository": "github:<you>/lexcode"
+  "repository": "github:Ankit6055/lex"
 }
 ```
 - Remove `"private": true` and the `peerDependencies` block from the current package.json.
 - Put the shebang `#!/usr/bin/env node` on the first line of `src/cli.ts`. Bun keeps it in the build. Check that `dist/cli.js` is executable.
 - Bundle the runtime dependencies into `dist/cli.js` so `npx` starts fast with nothing to install. If bundling breaks a provider, add `--packages=external` and move those packages to `dependencies`.
-- Before every publish: `npm pack`, then install the tarball in a temp dir with `npm i -g ./lexcode-x.y.z.tgz` and run `lexcode --version` and a real prompt **under Node, not Bun**.
+- Before every publish: `npm pack`, then install the tarball in a temp dir with `npm i -g ./ankit6055-lex-x.y.z.tgz` and run `lex --version` and a real prompt **under Node, not Bun**.
 - `npm publish --access public`. Have 2FA/OTP ready (this is why we publish at 0:15).
 - Push to a public GitHub repo. The brief is about being *open*, so link it from the README and the npm page.
 
@@ -479,7 +479,7 @@ Finish with: files changed, checks run, open issues.
 ## 7. README for judges (draft)
 
 ````md
-# lexcode
+# lex
 
 A minimal, open-source AI coding harness. It's around 1k lines of TypeScript you can read in an afternoon.
 Model, tools, memory, loop. Bring your own key. No OAuth, no account, your credits.
@@ -488,19 +488,19 @@ Model, tools, memory, loop. Bring your own key. No OAuth, no account, your credi
 ```bash
 export AI_GATEWAY_API_KEY=...     # recommended: one key, hundreds of models
 # or: export ANTHROPIC_API_KEY=...  /  export OPENAI_API_KEY=...
-# or: npx lexcode login           (saves to ~/.lexcode/auth.json, chmod 600)
+# or: npx @ankit6055/lex login           (saves to ~/.lex/auth.json, chmod 600)
 cd your-project
-npx lexcode
+npx @ankit6055/lex
 ```
 
 ## Swap the model
-lexcode --model gateway:openai/gpt-6.2-sol
-lexcode --model anthropic:claude-opus-5-5
+lex --model gateway:openai/gpt-6.2-sol
+lex --model anthropic:claude-opus-5-5
 /model gateway:zai/glm-5.3            # mid-conversation; history is kept
-lexcode models                        # what your keys can reach
+lex models                        # what your keys can reach
 
 ## Same task, two models
-lexcode compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add tests for utils.ts"
+lex compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add tests for utils.ts"
 
 ## How it works
 <diagram + one paragraph per part: loop, tools, context, memory, safety; link to each src file>
@@ -514,11 +514,11 @@ No sandbox. File tools are confined to the project dir. bash/write/edit ask befo
 
 ## 8. Demo script (about 3 minutes, for judges)
 
-1. `npx lexcode` in a toy repo with a failing test. The banner shows the model and that `AGENTS.md` was found.
+1. `npx @ankit6055/lex` in a toy repo with a failing test. The banner shows the model and that `AGENTS.md` was found.
 2. "Fix the failing test." The agent uses `grep`, `read`, `todo`, asks to run `bash npm test`, proposes an `edit` with a diff, re-runs the tests, and they pass. The footer shows tokens and steps.
 3. "Remember that we use bun, not npm." The agent calls `remember`. `/memory` shows the entry. Restart, and the agent already knows.
 4. `/model gateway:openai/gpt-6.2-sol`, then "Now add a test for the edge case." A model from a different lab continues the same conversation, on the same gateway key.
-5. `lexcode compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add input validation to createUser"`. Show the table and the two diffs.
+5. `lex compare --models gateway:anthropic/claude-sonnet-5-5,gateway:openai/gpt-6.2-sol "add input validation to createUser"`. Show the table and the two diffs.
 6. Open `src/agent.ts` (about 40 lines) to show "this is the whole loop."
 
 ---
@@ -534,7 +534,7 @@ No sandbox. File tools are confined to the project dir. bash/write/edit ask befo
 
 ## 10. Mapping to the Vercel course
 
-| Course module | Lexcode | Notes |
+| Course module | Lex | Notes |
 |---|---|---|
 | 1. Agent loop (ToolLoopAgent, read/grep/bash) | ✅ Keep | Adds multi-turn history and `ls` |
 | 2. Tool design (descriptions, shell safety, approval gates) | ✅ Keep and harden | Approval is a real interactive y/n/always prompt. Shell operators are blocked from auto-allow |
@@ -559,7 +559,7 @@ No sandbox. File tools are confined to the project dir. bash/write/edit ask befo
 | npm name taken or 2FA blocks the publish | Publish the stub at 0:15. Fall back to `lex-code` |
 | Bundled build breaks under Node | Test `npm pack` plus a global install under Node at every publish. Fall back to `--packages=external` |
 | Readline prompt clashes with the stream or spinner | One shared readline in `io.ts`. Stop the spinner before any prompt |
-| Judges have no key, or only one provider's key | Put AI Gateway first in the README (one key, every model). Clear no-key message plus `lexcode login`. Record the demo as a fallback |
+| Judges have no key, or only one provider's key | Put AI Gateway first in the README (one key, every model). Clear no-key message plus `lex login`. Record the demo as a fallback |
 | Gateway model IDs or `getAvailableModels()` differ from what we expect | Check at 0:00. Static shortlist fallback. `provider:id` always lets users pass any id through |
 | A key leaks into logs or session files | Keys only live in `auth.ts`. Never render provider errors raw; strip `Authorization`/key-like strings |
 | Agent runs something destructive (no sandbox) | Approval by default, operator-aware allowlist, path guard, `--readonly`. Compare runs only in temp copies |
@@ -569,20 +569,20 @@ No sandbox. File tools are confined to the project dir. bash/write/edit ask befo
 
 ## 12. What we borrow from pi (and what we skip)
 
-[pi](https://github.com/earendil-works/pi) (`packages/coding-agent`, `packages/ai`) is a minimal production harness with a similar philosophy. Agents can read these files for reference. **Don't copy code wholesale**: keep Lexcode readable in an afternoon.
+[pi](https://github.com/earendil-works/pi) (`packages/coding-agent`, `packages/ai`) is a minimal production harness with a similar philosophy. Agents can read these files for reference. **Don't copy code wholesale**: keep Lex readable in an afternoon.
 
-| Pi idea | Where in pi | Lexcode version |
+| Pi idea | Where in pi | Lex version |
 |---|---|---|
 | Model references: `provider/id`, bare ids, fuzzy matching, `:thinking` suffix | `coding-agent/src/core/model-resolver.ts` | `provider:id` plus bare-id routing (§4.1). Fuzzy matching and thinking suffix are stretch |
 | A default model per provider | `defaultModelPerProvider` in the same file | `DEFAULTS` for 3 providers |
-| Key store in `auth.json`, mode `0600`, `{type:"api_key", key}`, env first | `coding-agent/src/core/auth-storage.ts`, `ai/src/env-api-keys.ts` | `~/.lexcode/auth.json`, API keys only, **no OAuth** (pi also does subscription OAuth; we skip it) |
-| `/login` inside the app | pi README | `lexcode login` and `/login` |
+| Key store in `auth.json`, mode `0600`, `{type:"api_key", key}`, env first | `coding-agent/src/core/auth-storage.ts`, `ai/src/env-api-keys.ts` | `~/.lex/auth.json`, API keys only, **no OAuth** (pi also does subscription OAuth; we skip it) |
+| `/login` inside the app | pi README | `lex login` and `/login` |
 | Generated model catalog with context window and cost | `ai/src/models.generated.ts`, `providers/*.models.ts` | Live `gateway.getAvailableModels()` plus a small static list. A cost estimate in the footer is stretch |
 | Default tools `read, bash, edit, write` plus `grep, find, ls` | `coding-agent/src/core/tools/*`, `system-prompt.ts` | The same core set plus `todo`, `ask_user`, `remember` |
 | Truncation helpers (`truncateHead`/`truncateTail`, 2000 lines / 50KB defaults, 500-char grep lines) | `core/tools/truncate.ts` | `util/truncate.ts` with tighter caps (500 lines, 5k-char bash tail). **Also cap each grep line at 500 chars** |
 | Serialize writes to the same file | `core/tools/file-mutation-queue.ts` | Run `write`/`edit` one at a time (a simple promise chain in `tools/index.ts`) |
-| Project context files merged into the system prompt | `system-prompt.ts` (`contextFiles`) | `AGENTS.md`/`CLAUDE.md`/`LEXCODE.md` discovery (§4.5) |
-| Sessions as JSONL with `model_change` and `usage` entries | `core/session-manager.ts` | Stretch: `--continue` that writes `.lexcode/sessions/<id>.jsonl` |
+| Project context files merged into the system prompt | `system-prompt.ts` (`contextFiles`) | `AGENTS.md`/`CLAUDE.md`/`LEX.md` discovery (§4.5) |
+| Sessions as JSONL with `model_change` and `usage` entries | `core/session-manager.ts` | Stretch: `--continue` that writes `.lex/sessions/<id>.jsonl` |
 | Print/JSON mode for automation | pi `docs/cli.md` | One-shot mode prints plain text. A `--json` event stream is stretch |
 | **Skipped in pi on purpose:** sub-agents and plan mode | pi README | Our `task` subagent stays a stretch goal, which agrees with pi's choice |
 | Skipped by us: extensions, packages, themes, TUI, RPC, MCP, compaction | n/a | Out of scope for 3 hours |

@@ -15,7 +15,7 @@ const base: PromptContext = { cwd: "/work/app", os: "macOS 25.0", date: "2026-11
 describe("buildSystemPrompt", () => {
   test("minimal context: identity, core sections, no optional sections", () => {
     const p = buildSystemPrompt(base);
-    expect(p.startsWith("You are Lexcode, a coding agent working in `/work/app` on macOS 25.0.")).toBe(true);
+    expect(p.startsWith("You are Lex, a coding agent working in `/work/app` on macOS 25.0.")).toBe(true);
     expect(p).toContain("2026-11-22");
     for (const h of ["# Agency", "# Tools", "# Handling ambiguity", "# Planning", "# Memory"]) expect(p).toContain(h);
     expect(p).not.toContain("git branch");
@@ -33,7 +33,7 @@ describe("buildSystemPrompt", () => {
       memory: "- (2026-11-01) tests: bun test",
       skills: [{ name: "deploy", description: "Ship to prod" }],
     });
-    const order = ["You are Lexcode", "# Agency", "# Tools", "# Handling ambiguity", "# Planning", "# Project instructions", "# Memory", "# Skills"];
+    const order = ["You are Lex", "# Agency", "# Tools", "# Handling ambiguity", "# Planning", "# Project instructions", "# Memory", "# Skills"];
     const idx = order.map((h) => p.indexOf(h));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
@@ -101,7 +101,7 @@ describe("loadContext", () => {
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "ignore" });
 
   beforeEach(async () => {
-    tmp = await realpath(await mkdtemp(path.join(tmpdir(), "lexcode-ctx-")));
+    tmp = await realpath(await mkdtemp(path.join(tmpdir(), "lex-ctx-")));
   });
   afterEach(async () => {
     await rm(tmp, { recursive: true, force: true });
@@ -143,7 +143,7 @@ describe("loadContext", () => {
   test("nearest directory wins", async () => {
     const { repo, sub } = await gitRepo();
     await writeFile(path.join(repo, "AGENTS.md"), "outer");
-    await writeFile(path.join(sub, "LEXCODE.md"), "inner");
+    await writeFile(path.join(sub, "LEX.md"), "inner");
     const ctx = await loadContext(sub);
     expect(ctx.projectInstructions?.content).toBe("inner");
   });
@@ -164,10 +164,10 @@ describe("loadContext", () => {
   });
 
   test("loads memory when present and non-empty", async () => {
-    await mkdir(path.join(tmp, ".lexcode"));
-    await writeFile(path.join(tmp, ".lexcode", "memory.md"), "   ");
+    await mkdir(path.join(tmp, ".lex"));
+    await writeFile(path.join(tmp, ".lex", "memory.md"), "   ");
     expect((await loadContext(tmp)).memory).toBeUndefined();
-    await writeFile(path.join(tmp, ".lexcode", "memory.md"), "- (2026-11-22) use bun\n");
+    await writeFile(path.join(tmp, ".lex", "memory.md"), "- (2026-11-22) use bun\n");
     expect((await loadContext(tmp)).memory).toBe("- (2026-11-22) use bun");
   });
 

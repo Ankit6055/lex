@@ -1,4 +1,4 @@
-// Bring-your-own-key storage. Env vars win; otherwise ~/.lexcode/auth.json (mode 0600).
+// Bring-your-own-key storage. Env vars win; otherwise ~/.lex/auth.json (mode 0600).
 // Keys never leave this module except as the explicit `apiKey` handed to a provider.
 import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -21,9 +21,9 @@ const LABELS: Record<ProviderId, string> = {
 
 type AuthFile = Partial<Record<ProviderId, { type: "api_key"; key: string }>>;
 
-/** ~/.lexcode, overridable with LEXCODE_HOME (used by tests). */
+/** ~/.lex, overridable with LEX_HOME (used by tests). */
 export function configDir(): string {
-  return process.env.LEXCODE_HOME || path.join(homedir(), ".lexcode");
+  return process.env.LEX_HOME || path.join(homedir(), ".lex");
 }
 const authPath = () => path.join(configDir(), "auth.json");
 
@@ -35,7 +35,7 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
-/** Reads ~/.lexcode/config.json (e.g. `{ "defaultModel": "gateway:openai/gpt-6.2-sol" }`). */
+/** Reads ~/.lex/config.json (e.g. `{ "defaultModel": "gateway:openai/gpt-6.2-sol" }`). */
 export async function readConfig(): Promise<{ defaultModel?: string }> {
   return (await readJson(path.join(configDir(), "config.json"))) ?? {};
 }

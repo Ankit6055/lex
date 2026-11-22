@@ -7,7 +7,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const sections: string[] = [];
 
   // 1. Identity
-  const identity = [`You are Lexcode, a coding agent working in \`${ctx.cwd}\` on ${ctx.os}.`];
+  const identity = [`You are Lex, a coding agent working in \`${ctx.cwd}\` on ${ctx.os}.`];
   if (ctx.date) identity.push(`Today's date is ${ctx.date}.`);
   if (ctx.gitBranch) identity.push(`Current git branch: ${ctx.gitBranch}.`);
   sections.push(identity.join("\n"));

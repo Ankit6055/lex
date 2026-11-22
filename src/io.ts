@@ -4,11 +4,11 @@ import pc from "picocolors";
 import type { IO } from "./types.ts";
 
 /*
- * Terminal I/O for lexcode.
+ * Terminal I/O for lex.
  *
  * - Exactly ONE readline interface, created lazily on the first prompt and shared by every IO method.
- *   Lines are queued as they arrive, so piped stdin (`printf 'a\nb\n' | lexcode`) never loses lines.
- * - Prompts are written to stderr, so stdout stays clean for the model's answer (`lexcode "..." > out.txt`).
+ *   Lines are queued as they arrive, so piped stdin (`printf 'a\nb\n' | lex`) never loses lines.
+ * - Prompts are written to stderr, so stdout stays clean for the model's answer (`lex "..." > out.txt`).
  * - Between prompts the interface is paused and raw mode is switched off, so Ctrl-C reaches the process
  *   as a normal SIGINT (the REPL uses that to abort a turn).
  * - A small spinner (`startSpinner` / `stopSpinner`) that `withPaused` stops around prompts.

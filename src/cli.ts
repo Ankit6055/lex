@@ -18,14 +18,14 @@ import { buildSystemPrompt } from "./prompt.ts";
 import { runRepl } from "./repl.ts";
 import { runCompare } from "./compare.ts";
 
-const HELP = `lexcode ${pkg.version}: a minimal, open-source AI coding harness
+const HELP = `lex ${pkg.version}: a minimal, open-source AI coding harness
 
 Usage
-  lexcode                          interactive session in the current directory
-  lexcode "fix the failing test"   one-shot: run, print, exit
-  lexcode compare --models a,b "task"
-  lexcode login                    save an API key to ~/.lexcode/auth.json
-  lexcode models                   list models your keys can reach
+  lex                              interactive session in the current directory
+  lex "fix the failing test"       one-shot: run, print, exit
+  lex compare --models a,b "task"
+  lex login                        save an API key to ~/.lex/auth.json
+  lex models                       list models your keys can reach
 
 Options
   -m, --model <spec>   gateway:anthropic/claude-sonnet-5.5 | anthropic:claude-sonnet-5-5 | openai:gpt-6.2-sol
@@ -36,7 +36,7 @@ Options
   -v, --version
   -h, --help
 
-Keys: AI_GATEWAY_API_KEY (recommended), ANTHROPIC_API_KEY, OPENAI_API_KEY, or \`lexcode login\`.`;
+Keys: AI_GATEWAY_API_KEY (recommended), ANTHROPIC_API_KEY, OPENAI_API_KEY, or \`lex login\`.`;
 
 function fail(msg: string, code = 1): never {
   process.stderr.write(pc.red(redact(msg)) + "\n");
@@ -46,7 +46,7 @@ function fail(msg: string, code = 1): never {
 async function oneShot(o: { root: string; prompt: string; model?: string; mode: ApprovalMode; maxSteps?: number }) {
   const io = createIO();
   const approver = createApprover(io, o.mode);
-  const tools = buildTools({ root: o.root, approver, io, memoryPath: path.join(o.root, ".lexcode", "memory.md") });
+  const tools = buildTools({ root: o.root, approver, io, memoryPath: path.join(o.root, ".lex", "memory.md") });
   const [resolved, ctx] = await Promise.all([resolveModel(o.model), loadContext(o.root)]);
   const agent = createAgent({
     model: resolved,
@@ -92,7 +92,7 @@ async function main(): Promise<number> {
       },
     });
   } catch (e) {
-    fail(`${(e as Error).message}\nRun lexcode --help for usage.`);
+    fail(`${(e as Error).message}\nRun lex --help for usage.`);
   }
   const { values: v, positionals } = parsed;
 
@@ -123,7 +123,7 @@ async function main(): Promise<number> {
     }
     case "compare": {
       const models = (v.models ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      if (models.length < 2 || !rest.length) fail('Usage: lexcode compare --models a,b "task"');
+      if (models.length < 2 || !rest.length) fail('Usage: lex compare --models a,b "task"');
       await runCompare({ root, models, task: rest.join(" "), diff: v.diff, maxSteps });
       return 0;
     }

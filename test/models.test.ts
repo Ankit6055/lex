@@ -47,7 +47,7 @@ describe("auth", () => {
   const saved = { ...process.env };
   beforeEach(async () => {
     home = await mkdtemp(path.join(tmpdir(), "lex-auth-"));
-    process.env.LEXCODE_HOME = home;
+    process.env.LEX_HOME = home;
     delete process.env.AI_GATEWAY_API_KEY;
     delete process.env.OPENAI_API_KEY;
   });

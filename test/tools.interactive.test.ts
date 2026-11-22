@@ -49,7 +49,7 @@ afterEach(async () => {
 });
 
 function makeCtx(mode: ApprovalMode, io: IO): ToolContext {
-  return { root, io, approver: createApprover(io, mode), memoryPath: path.join(root, ".lexcode", "memory.md") };
+  return { root, io, approver: createApprover(io, mode), memoryPath: path.join(root, ".lex", "memory.md") };
 }
 
 const call = (t: Tool, input: unknown): Promise<string> =>
@@ -197,7 +197,7 @@ describe("ask_user", () => {
 });
 
 describe("remember", () => {
-  test("appends dated bullets, creating .lexcode/", async () => {
+  test("appends dated bullets, creating .lex/", async () => {
     const ctx = makeCtx("ask", fakeIO().io);
     const tool = createRememberTool(ctx);
     expect(await call(tool, { fact: "Use bun test" })).toContain("Remembered");

@@ -30,7 +30,7 @@ export interface ToolContext {
   root: string;          // realpath of project root; all file access is confined here
   approver: Approver;
   io: IO;
-  memoryPath: string;    // <root>/.lexcode/memory.md
+  memoryPath: string;    // <root>/.lex/memory.md
 }
 export type ToolFactory = (ctx: ToolContext) => Tool;
 

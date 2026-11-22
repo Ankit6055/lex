@@ -5,7 +5,7 @@ import path from "node:path";
 import type { PromptContext } from "./types.ts";
 import { capChars } from "./util/truncate.ts";
 
-export const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md", "LEXCODE.md"] as const;
+export const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md", "LEX.md"] as const;
 export const MAX_INSTRUCTION_CHARS = 8000;
 
 /** Run a git command in `cwd`; resolves to trimmed stdout, or undefined on any failure. */
@@ -83,7 +83,7 @@ export async function loadContext(root: string): Promise<Omit<PromptContext, "to
   const realRoot = await realpath(root).catch(() => root);
   const [projectInstructions, memoryRaw] = await Promise.all([
     findProjectInstructions(searchDirs(realRoot, gitRoot)),
-    readIfExists(path.join(root, ".lexcode", "memory.md")),
+    readIfExists(path.join(root, ".lex", "memory.md")),
   ]);
   const memory = memoryRaw?.trim() || undefined;
 

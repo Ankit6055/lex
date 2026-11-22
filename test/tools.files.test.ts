@@ -39,7 +39,7 @@ let root: string;
 let outside: string;
 
 function ctxWith(result: ApprovalResult = "allow"): ToolContext & { approver: ReturnType<typeof fakeApprover> } {
-  return { root, approver: fakeApprover(result), io: fakeIO, memoryPath: path.join(root, ".lexcode/memory.md") };
+  return { root, approver: fakeApprover(result), io: fakeIO, memoryPath: path.join(root, ".lex/memory.md") };
 }
 
 async function run(t: unknown, input: Record<string, unknown>): Promise<string> {
@@ -49,7 +49,7 @@ async function run(t: unknown, input: Record<string, unknown>): Promise<string> 
 }
 
 beforeEach(async () => {
-  const base = await realpath(await mkdtemp(path.join(tmpdir(), "lexcode-files-")));
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "lex-files-")));
   root = path.join(base, "proj");
   outside = path.join(base, "outside");
   await mkdir(root);

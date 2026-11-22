@@ -7,7 +7,7 @@ import type { ToolFactory } from "../types.ts";
 export const MEMORY_MAX_CHARS = 4_000;
 const FACT_MAX_CHARS = 500;
 
-const DESCRIPTION = `Save one durable fact about this project or the user's preferences to .lexcode/memory.md, which is loaded into future sessions.
+const DESCRIPTION = `Save one durable fact about this project or the user's preferences to .lex/memory.md, which is loaded into future sessions.
 
 WHEN TO USE:
 - The user states a lasting preference ("always use pnpm", "never touch generated/").
