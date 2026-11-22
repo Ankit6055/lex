@@ -212,3 +212,13 @@ test.skipIf(process.platform === "win32")("TUI: approval dialog, esc denies and 
     await server.stop(true);
   }
 });
+
+test("model Markdown is cleaned up for the terminal: no raw asterisks, backticks or em dashes", async () => {
+  const { formatLine } = await import("../src/ui/markdown.ts");
+  const plain = (s: string) => stripAnsi(formatLine(s));
+  expect(plain("**Approval modes**")).toBe("Approval modes");
+  expect(plain("- **Ask** (default) runs `npm test` — always.")).toBe("- Ask (default) runs npm test - always.");
+  expect(plain("## Tools")).toBe("Tools");
+  expect(plain("* one")).toBe("- one");
+  expect(plain("2*3*4 stays")).toBe("2*3*4 stays");
+});

@@ -16,7 +16,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     has("task") && "Delegate broad, read-heavy questions to task to keep your context small.",
     has("ask_user") && "If you're blocked on a decision that matters, ask with ask_user; otherwise pick a sensible default.",
     has("remember") && "Save durable facts (commands, conventions, preferences) with remember.",
-    "Be concise. Show file paths clearly.",
+    "Be concise. Write plain text for a terminal: no bold, italics or headings, no em dashes; short paragraphs or simple - lists. Show file paths clearly.",
   ].filter(Boolean);
 
   const sections = [

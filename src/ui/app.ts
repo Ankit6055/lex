@@ -276,7 +276,7 @@ export async function runTui(o: ReplOptions): Promise<void> {
         onChunk: (c) => { transcript.onChunk(c); screen.render(); },
       });
       transcript.endText();
-      if (!turn.aborted) screen.print(t.shade(`  ${formatFooter(turn.usage, session.model.spec)}`));
+      if (!turn.aborted) screen.print(t.shade(`  ${formatFooter(turn.usage, shortModel(session.model.spec))}`));
     } catch (e) {
       transcript.endText();
       screen.print(t.coral(`  ✗ ${redact(e instanceof Error ? e.message : String(e))}`) + "\n" + t.shade("    The turn was rolled back. Retry, or switch models with ctrl+l."));
@@ -416,7 +416,7 @@ export async function runTui(o: ReplOptions): Promise<void> {
       } },
       { name: "usage", desc: "Tokens, speed and time for this session", run: () => {
         const u = session.totals;
-        screen.print(t.mist(`  ${u.turns} turns · ${u.toolCalls} tool calls · ${formatFooter(u, session.model.spec)}`));
+        screen.print(t.mist(`  ${u.turns} turns · ${u.toolCalls} tool calls · ${formatFooter(u, shortModel(session.model.spec))}`));
       } },
       { name: "yolo", desc: "Toggle bypass mode: run everything without asking", run: () => { session.approver.setMode(session.approver.mode === "yolo" ? "ask" : "yolo"); screen.render(); } },
       { name: "login", desc: "Save an API key", run: () => login(io) },
@@ -462,29 +462,43 @@ export async function runTui(o: ReplOptions): Promise<void> {
   (controller as AbortController | null)?.abort();
   screen.stop();
   const u = session.totals;
-  if (u.turns) process.stdout.write(t.shade(`${u.turns} turns · ${formatFooter(u, session.model.spec)}\n`));
+  if (u.turns) process.stdout.write(t.shade(`${u.turns} turns · ${formatFooter(u, shortModel(session.model.spec))}\n`));
 }
 
 async function printBanner(screen: Screen, session: Session): Promise<void> {
   const ctx = await loadContext(session.root);
   const mem = await readFile(session.memoryPath, "utf8").then((s) => s.split("\n").filter((l) => l.startsWith("- ")).length, () => 0);
+  const [provider, ...idParts] = session.model.spec.split(":");
+  const instr = ctx.projectInstructions ? path.relative(session.root, ctx.projectInstructions.file) || ctx.projectInstructions.file : "none";
+  const extras = [`${mem} ${mem === 1 ? "memory" : "memories"}`, ...(ctx.skills?.length ? [`${ctx.skills.length} skills`] : [])].join(", ");
+  const details: [string, string][] = [
+    ["model", t.ink(idParts.join(":"))],
+    ["via", t.mist(provider ?? "")],
+    ["project", t.ink(path.basename(session.root)) + (ctx.gitBranch ? t.mist(` on ${ctx.gitBranch}`) : "")],
+    ["context", t.mist(`${instr}, ${extras}`)],
+    ["version", t.mist(pkg.version)],
+  ];
   const cols = screen.cols;
-  const W = Math.min(cols - 2, 76);
+  const W = Math.min(cols - 2, 80);
   const inner = W - 2;
   const row = (s = "") => t.hair("│") + pad(s, inner) + t.hair("│");
   const out: string[] = [t.hair("┌" + "─".repeat(inner) + "┐"), row()];
-  if (inner >= 34) for (const l of wordmark()) out.push(row("   " + l));
-  else out.push(row("   " + bold(t.ink("lex"))));
-  out.push(row(), row(`   ${t.mist("a coding agent you can read in an afternoon")}  ${t.shade(`v${pkg.version}`)}`), row());
-  const half = Math.floor(inner / 2);
-  const cells = (a: string, b: string) => t.hair("│") + pad(` ${a}`, half) + t.hair("│") + pad(` ${b}`, inner - half - 1) + t.hair("│");
-  out.push(t.hair("├" + "─".repeat(half) + "┬" + "─".repeat(inner - half - 1) + "┤"));
-  const [provider, ...idParts] = session.model.spec.split(":");
-  const instr = ctx.projectInstructions ? path.relative(session.root, ctx.projectInstructions.file) || ctx.projectInstructions.file : "no AGENTS.md";
-  out.push(cells(t.shade("MODEL"), t.shade("PROJECT")));
-  out.push(cells(t.ink(idParts.join(":")), t.ink(`${tilde(session.root)}${ctx.gitBranch ? t.mist(` (${ctx.gitBranch})`) : ""}`)));
-  out.push(cells(t.mist(`via ${provider}`), t.mist(`${instr} · ${mem} ${mem === 1 ? "memory" : "memories"}${ctx.skills?.length ? ` · ${ctx.skills.length} skills` : ""}`)));
-  out.push(t.hair("└" + "─".repeat(half) + "┴" + "─".repeat(inner - half - 1) + "┘"));
-  out.push(`  ${t.shade("/ commands · @ files · shift+tab modes · ctrl+l models · ? shortcuts")}`, "");
+  const mark = wordmark();
+  const markW = 26;
+  if (inner >= markW + 36) {
+    // Wordmark on the left, details beside it: the whole header in seven rows.
+    mark.forEach((m, i) => {
+      const [label, value] = details[i] ?? ["", ""];
+      out.push(row(`   ${pad(m, markW)}      ${pad(t.shade(label), 9)}${value}`));
+    });
+  } else {
+    if (inner >= markW + 4) for (const m of mark) out.push(row(`   ${m}`));
+    else out.push(row(`   ${bold(t.ink("lex"))}`));
+    out.push(row());
+    for (const [label, value] of details) out.push(row(`   ${pad(t.shade(label), 9)}${value}`));
+  }
+  out.push(row(), t.hair("└" + "─".repeat(inner) + "┘"));
+  const hint = cols >= 92 ? `${t.mist("A coding agent you can read in an afternoon.")} ${t.shade("Type / for commands or ? for shortcuts.")}` : t.shade("Type / for commands or ? for shortcuts.");
+  out.push(`  ${hint}`, "");
   screen.print(out.join("\n"));
 }

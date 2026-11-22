@@ -4,6 +4,7 @@ import type { Chunk } from "../agent.ts";
 import type { Screen } from "./screen.ts";
 import { t, bold } from "./theme.ts";
 import { truncate } from "./text.ts";
+import { formatLine } from "./markdown.ts";
 
 const one = (s: unknown, n = 60) => truncate(String(s ?? "").replace(/\s+/g, " ").trim(), n);
 const q = (s: unknown, n = 50) => `"${one(s, n)}"`;
@@ -127,7 +128,7 @@ export function createTranscript(screen: Screen) {
         case "text-delta": {
           if (!c.text) break;
           count(c.text.length);
-          if (!inText) { startBlock(); screen.wrapIndent = "  "; screen.streamText("● "); inText = true; pendingNL = 0; }
+          if (!inText) { startBlock(); screen.wrapIndent = "  "; screen.lineFormat = formatLine; screen.streamText("● "); inText = true; pendingNL = 0; }
           let out = "";
           for (const ch of c.text) {
             if (ch === "\n") { pendingNL++; continue; }
@@ -188,7 +189,7 @@ export function createTranscript(screen: Screen) {
           break;
         case "abort":
           endText();
-          screen.print(t.gold("  ⎿ Interrupted · tell lex what to do instead"));
+          screen.print(`  ${t.hair("└")} ${t.gold("Interrupted.")} ${t.mist("Tell lex what to do instead.")}`);
           break;
       }
     },

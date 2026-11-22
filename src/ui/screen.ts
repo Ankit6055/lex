@@ -15,6 +15,8 @@ export class Screen {
   private partial = "";      // streamed text not yet ended by a newline
   /** Prefix for soft-wrapped continuation rows of streamed text (e.g. "  " under a "● " bullet). */
   wrapIndent = "";
+  /** Applied to each line of streamed text before display (e.g. Markdown cleanup). */
+  lineFormat: (line: string) => string = (l) => l;
   private handlers: KeyHandler[] = [];
   private view: () => View = () => ({ lines: [] });
   private started = false;
@@ -101,7 +103,7 @@ export class Screen {
     if (!this.started) return;
     const v = this.view();
     const max = this.cols - 1;
-    const head = this.partial ? [this.partial] : [];
+    const head = this.partial ? [this.lineFormat(this.partial)] : [];
     const lines = [...head, ...v.lines].map((l) => truncate(l, max));
     let buf = "\x1b[?25l" + this.eraseSeq() + lines.join("\r\n");
     this.rows = lines.length;
@@ -139,7 +141,7 @@ export class Screen {
       done.push(...rows.slice(0, -1).map((r) => r.text.trimEnd()));
       this.partial = this.wrapIndent + rows[rows.length - 1]!.text;
     }
-    if (done.length) this.print(done.join("\n") + "\n"); // explicit newline keeps blank lines (paragraph breaks)
+    if (done.length) this.print(done.map(this.lineFormat).join("\n") + "\n"); // explicit newline keeps blank lines
     else this.render();
   }
 
@@ -148,7 +150,7 @@ export class Screen {
     if (!this.partial) return;
     const line = this.partial;
     this.partial = "";
-    this.print(line);
+    this.print(this.lineFormat(line));
   }
 
   get streaming(): boolean {
