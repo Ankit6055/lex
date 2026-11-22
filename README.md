@@ -78,10 +78,14 @@ Before a turn, Lex can snapshot the project in a private Git repository under `~
 
 ```bash
 lex compare --models gateway:anthropic/claude-sonnet-5.5,gateway:openai/gpt-6.2-sol \
-  --diff "Add input validation to createUser"
+  --check 'npm test' --diff "Add input validation to createUser"
 ```
 
-In a terminal you can omit `--models` to open the picker. Lex runs each model in parallel in a separate temporary Git copy and prints its result, steps, tool calls, token usage, elapsed time, changed files, and copy path. Use `--diff` to include the full diffs. Compare runs agents unattended and links an existing `node_modules` directory from the source project.
+In a terminal you can omit `--models` to open the picker. Lex runs each model in parallel in a separate temporary Git copy and displays its status, token usage, generation speed when available, estimated cost, and recent tool activity. Press `Esc` to stop the race. Piped runs and `LEX_PLAIN=1` use line-by-line logs.
+
+Use `--check '<command>'` to score the result in each copy. Lex defaults to `npm test` when the project's `package.json` defines a test script. The final report shows check results, the fastest qualifying model, the cheapest qualifying model when pricing is available, and paths to the copies. Failed checks include an output excerpt. Costs are estimates based on AI Gateway catalog prices for supported models.
+
+Use `--diff` to include full diffs. Compare runs agents unattended and links an existing `node_modules` directory from the source project.
 
 ## Providers and configuration
 
