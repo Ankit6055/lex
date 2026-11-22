@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lex: a coding agent you can read in an afternoon</title>
+<meta name="description" content="lex is an open-source AI coding agent for your terminal. Bring your own key, swap models mid-task across 19 providers, race models on the same task, and undo any turn.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #ECEAE4;
+    --mist: #8C8A85;
+    --shade: #5E5C58;
+    --hair: #2D2C2A;
+    --panel: #191918;
+    --deep: #121211;
+    --aqua: #8FD9C3;
+    --holo: linear-gradient(180deg, #7FD3E6 0%, #A8E0D8 28%, #E6E1A6 55%, #F0B2A2 80%, #E79AA8 100%);
+    --holo-x: linear-gradient(90deg, #7FD3E6 0%, #A8E0D8 30%, #E6E1A6 58%, #F0B2A2 85%, #E79AA8 100%);
+    --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 400 16px/1.55 var(--sans);
+    background:
+      radial-gradient(1200px 700px at 8% 85%, rgba(240, 150, 140, .55), transparent 60%),
+      radial-gradient(900px 600px at 95% 10%, rgba(40, 170, 190, .55), transparent 60%),
+      linear-gradient(160deg, #1f9fb3 0%, #8fd0d8 38%, #e9e3df 58%, #f2a39a 78%, #e98f86 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid #A8E0D8; outline-offset: 3px; border-radius: 4px; }
+
+  .panel {
+    position: relative;
+    width: calc(100% - 2 * clamp(0px, 2vw, 24px));
+    max-width: 1180px;
+    margin: clamp(16px, 6vw, 72px) auto 0;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  .panel::before { /* fine grain, as in the reference panel */
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  }
+  .wrap { position: relative; padding: 0 clamp(16px, 5vw, 64px); }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; border-bottom: 1px solid var(--hair); }
+  .brand { display: flex; align-items: baseline; gap: 10px; text-decoration: none; }
+  .brand b { font: 600 20px/1 var(--mono); letter-spacing: -.02em; background: var(--holo-x); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand span { color: var(--shade); font: 400 13px var(--mono); }
+  nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--mist); }
+  nav .links a { text-decoration: none; }
+  nav .links a:hover { color: var(--ink); }
+
+  header.hero { padding: clamp(56px, 10vw, 120px) 0 clamp(40px, 7vw, 80px); }
+  h1 {
+    margin: 0;
+    font: 500 clamp(36px, 5.6vw, 64px)/1.04 var(--sans); letter-spacing: -.035em;
+  }
+  h1 .holo { background: var(--holo-x); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { margin: 28px 0 0; max-width: 58ch; color: var(--mist); font-size: clamp(16px, 1.6vw, 18px); }
+  .install { margin-top: 36px; display: flex; width: fit-content; align-items: center; gap: 0; border: 1px solid var(--hair); background: var(--deep); max-width: 100%; }
+  .install code { min-width: 0; padding: 14px 18px; font: 400 15px var(--mono); color: var(--ink); white-space: nowrap; overflow-x: auto; }
+  .install code::before { content: "$ "; color: var(--shade); }
+  .install button {
+    align-self: stretch; padding: 0 18px; border: 0; border-left: 1px solid var(--hair);
+    background: transparent; color: var(--mist); font: 500 13px var(--sans); cursor: pointer;
+  }
+  .install button:hover { color: var(--ink); }
+  .meta { margin-top: 16px; font-size: 13px; color: var(--shade); }
+
+  /* The harness: model, loop, tools */
+  .grid { display: grid; grid-template-columns: 1fr 1.25fr 1fr; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+  .grid > * { min-width: 0; }
+  .col { border-left: 1px solid var(--hair); }
+  .col:first-child { border-left: 0; }
+  .layer {
+    display: block; width: 100%; text-align: left; padding: 34px 32px 38px; min-height: 210px;
+    background: none; border: 0; border-bottom: 1px solid var(--hair); color: var(--shade); cursor: pointer; font: inherit;
+    transition: color .25s;
+  }
+  .layer:last-child { border-bottom: 0; }
+  .layer svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.4; }
+  .layer h3 { margin: 18px 0 10px; font: 500 15px/1.2 var(--sans); letter-spacing: .02em; text-transform: uppercase; }
+  .layer p { margin: 0; font-size: 14px; line-height: 1.5; max-width: 34ch; }
+  .layer:hover, .layer[aria-pressed="true"] { color: var(--ink); }
+  .layer:hover p, .layer[aria-pressed="true"] p { color: var(--mist); }
+
+  .stage { display: flex; align-items: center; justify-content: center; padding: 28px 12px; }
+  .stage svg { width: 100%; max-width: 380px; height: auto; overflow: visible; }
+  .slab { cursor: pointer; }
+  .slab .side { fill: #161615; stroke: #2f2e2b; transition: fill .35s; }
+  .slab .top { fill: #121211; stroke: url(#rim); stroke-width: 1.2; }
+  .slab .glyph { stroke: #4a4946; fill: none; transition: stroke .35s; }
+  .slab.on .side { fill: url(#holoSide); }
+  .slab.on .glyph { stroke: url(#holoGlyph); }
+  .slab:focus-visible { outline: none; }
+  .slab:focus-visible .top { stroke: #A8E0D8; stroke-width: 2; }
+  .wire { stroke: #3b3a37; stroke-dasharray: 3 4; }
+
+  .detail { position: relative; padding: 40px 34px 40px 40px; }
+  .detail::before { content: ""; position: absolute; left: 0; top: 34px; bottom: 34px; width: 3px; background: var(--holo); }
+  .detail .k { font: 400 12px var(--mono); color: var(--shade); }
+  .detail h2 { margin: 14px 0 14px; font: 500 22px/1.15 var(--sans); letter-spacing: -.015em; }
+  .detail p { margin: 0 0 14px; color: var(--mist); font-size: 15px; max-width: 38ch; }
+  .detail pre { margin: 22px 0 0; padding: 14px 16px; background: var(--deep); border: 1px solid var(--hair); font: 400 13px/1.6 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  .detail pre .s { color: var(--shade); }
+  .detail pre .a { color: var(--aqua); }
+
+  section.block { padding: clamp(56px, 9vw, 104px) 0; border-bottom: 1px solid var(--hair); }
+  section.block:last-of-type { border-bottom: 0; }
+  .block h2 { margin: 0; font: 500 clamp(28px, 3.8vw, 44px)/1.08 var(--sans); letter-spacing: -.03em; max-width: 20ch; }
+  .block .sub { margin: 18px 0 0; color: var(--mist); max-width: 60ch; }
+
+  .term { margin-top: 40px; border: 1px solid var(--hair); background: var(--deep); }
+  .term .bar { display: flex; gap: 7px; padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+  .term .bar i { width: 10px; height: 10px; border-radius: 50%; background: #2c2b29; }
+  .term pre { margin: 0; padding: 20px 22px 24px; overflow-x: auto; font: 400 13.5px/1.7 var(--mono); color: var(--ink); }
+  .term .s { color: var(--shade); }
+  .term .m { color: var(--mist); }
+  .term .a { color: var(--aqua); }
+  .term .w { font-weight: 500; background: var(--holo-x); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .files { margin-top: 40px; border-top: 1px solid var(--hair); }
+  .files a {
+    display: grid; grid-template-columns: minmax(150px, 220px) 70px 1fr; gap: 16px; align-items: baseline;
+    padding: 15px 0; border-bottom: 1px solid var(--hair); text-decoration: none; color: var(--mist);
+  }
+  .files a:hover { color: var(--ink); }
+  .files code { font: 400 14px var(--mono); color: var(--ink); }
+  .files .n { font: 400 13px var(--mono); color: var(--shade); text-align: right; }
+  .files .total { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; padding: 16px 0; color: var(--shade); font-size: 14px; }
+
+  .providers { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .providers span { padding: 7px 12px; border: 1px solid var(--hair); font: 400 13px var(--mono); color: var(--mist); }
+  .providers span.rec { color: var(--ink); border-color: #4a4946; }
+
+  .cta { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 28px; }
+  footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 26px 0 30px; border-top: 1px solid var(--hair); color: var(--shade); font-size: 13px; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  .below { height: clamp(16px, 6vw, 72px); }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .col { border-left: 0; border-top: 1px solid var(--hair); }
+    .col:first-child { border-top: 0; }
+    .col.layers { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .layer { min-height: 0; padding: 22px 16px; border-bottom: 0; border-left: 1px solid var(--hair); }
+    .layer:first-child { border-left: 0; }
+    .layer p { display: none; }
+    .layer h3 { font-size: 12px; margin-bottom: 0; }
+    .stage svg { max-width: 300px; }
+    nav .links { gap: 14px; }
+    .detail { padding: 32px 20px 32px 26px; }
+    .files a { grid-template-columns: 1fr auto; }
+    .files a span:last-child { grid-column: 1 / -1; font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#top" aria-label="lex home"><b>lex</b><span>v0.3.0</span></a>
+      <div class="links">
+        <a href="#race">Compare</a>
+        <a href="#source">Source</a>
+        <a href="https://github.com/Ankit6055/lex">GitHub</a>
+      </div>
+    </nav>
+
+    <header class="hero" id="top">
+      <h1>A coding agent<br><span class="holo">you can read in an afternoon.</span></h1>
+      <p class="lede">lex is an open-source AI coding agent for your terminal. Bring your own key, swap models mid-task across 19 providers, race them on the same job, and undo any turn.</p>
+      <div class="install">
+        <code id="cmd">npx @ankit6055/lex</code>
+        <button type="button" id="copy" aria-label="Copy install command">Copy</button>
+      </div>
+      <p class="meta">Node 22 or newer · MIT licensed · no account, your own credits</p>
+    </header>
+  </div>
+
+  <div class="grid" aria-label="How lex is built">
+    <div class="col layers" role="group" aria-label="Harness layers">
+      <button class="layer" data-layer="model" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>
+        <h3>Model</h3>
+        <p>Any of 19 providers with your own key. Switch mid-task.</p>
+      </button>
+      <button class="layer" data-layer="loop" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
+        <h3>Loop</h3>
+        <p>One streamed tool loop. The whole thing fits in one file.</p>
+      </button>
+      <button class="layer" data-layer="tools" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>
+        <h3>Tools</h3>
+        <p>Read, edit, run. Changes ask first, and every turn can be undone.</p>
+      </button>
+    </div>
+
+    <div class="col stage">
+      <svg viewBox="0 0 400 640" role="img" aria-label="Three stacked layers: model, loop and tools">
+        <defs>
+          <linearGradient id="holoSide" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#7FD3E6"/><stop offset=".35" stop-color="#A8E0D8"/>
+            <stop offset=".6" stop-color="#E6E1A6"/><stop offset=".85" stop-color="#F0B2A2"/><stop offset="1" stop-color="#E79AA8"/>
+          </linearGradient>
+          <linearGradient id="holoGlyph" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7FD3E6"/><stop offset=".5" stop-color="#E6E1A6"/><stop offset="1" stop-color="#F0B2A2"/>
+          </linearGradient>
+          <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7FD3E6" stop-opacity=".55"/><stop offset=".5" stop-color="#3a3936"/><stop offset="1" stop-color="#E6E1A6" stop-opacity=".45"/>
+          </linearGradient>
+        </defs>
+        <g class="wires">
+          <line class="wire" x1="60" y1="120" x2="60" y2="550"/>
+          <line class="wire" x1="340" y1="120" x2="340" y2="550"/>
+          <line class="wire" x1="200" y1="196" x2="200" y2="600"/>
+        </g>
+        <!-- each slab: top face is a rhombus; glyphs are drawn in a 100x100 square mapped onto it -->
+        <g class="slab" data-layer="model" tabindex="0" role="button" aria-label="Model layer" transform="translate(0,20)">
+          <path class="side" d="M60 86 L200 166 L200 190 L60 110 Z"/><path class="side" d="M200 166 L340 86 L340 110 L200 190 Z"/>
+          <path class="top" d="M200 6 L340 86 L200 166 L60 86 Z" stroke-linejoin="round"/>
+          <g class="glyph" transform="matrix(1.4,0.8,-1.4,0.8,200,6)"><path vector-effect="non-scaling-stroke" stroke-width="1.6" d="M50 22v56M22 50h56M30 30l40 40M70 30 30 70"/><rect vector-effect="non-scaling-stroke" x="12" y="12" width="76" height="76" rx="10" stroke-width=".8" stroke-dasharray="2 3"/></g>
+        </g>
+        <g class="slab" data-layer="loop" tabindex="0" role="button" aria-label="Loop layer" transform="translate(0,230)">
+          <path class="side" d="M60 86 L200 166 L200 190 L60 110 Z"/><path class="side" d="M200 166 L340 86 L340 110 L200 190 Z"/>
+          <path class="top" d="M200 6 L340 86 L200 166 L60 86 Z" stroke-linejoin="round"/>
+          <g class="glyph" transform="matrix(1.4,0.8,-1.4,0.8,200,6)"><path vector-effect="non-scaling-stroke" stroke-width="1.6" d="M74 50a24 24 0 1 1-7-17M74 26v12H62"/><rect vector-effect="non-scaling-stroke" x="12" y="12" width="76" height="76" rx="10" stroke-width=".8" stroke-dasharray="2 3"/></g>
+        </g>
+        <g class="slab" data-layer="tools" tabindex="0" role="button" aria-label="Tools layer" transform="translate(0,440)">
+          <path class="side" d="M60 86 L200 166 L200 190 L60 110 Z"/><path class="side" d="M200 166 L340 86 L340 110 L200 190 Z"/>
+          <path class="top" d="M200 6 L340 86 L200 166 L60 86 Z" stroke-linejoin="round"/>
+          <g class="glyph" transform="matrix(1.4,0.8,-1.4,0.8,200,6)"><path vector-effect="non-scaling-stroke" stroke-width="1.6" d="M36 32 20 50l16 18M64 32l16 18-16 18M56 26 44 74"/><rect vector-effect="non-scaling-stroke" x="12" y="12" width="76" height="76" rx="10" stroke-width=".8" stroke-dasharray="2 3"/></g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="col">
+      <article class="detail" id="detail" aria-live="polite"></article>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="block" id="race">
+      <h2>Same task, three models, one verdict.</h2>
+      <p class="sub">lex compare runs each model in its own throwaway copy of your project, in parallel, with live panes. When they finish it runs your tests in every copy and prices each run. This is a real run on the bundled toy repo.</p>
+      <div class="term" role="figure" aria-label="Output of lex compare">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+<pre><span class="s">$</span> lex compare --models gateway:anthropic/claude-sonnet-5.5,gateway:openai/gpt-6.2-sol,gateway:zai/glm-5.3 "fix the failing test"
+<span class="m">Pass/fail: `npm test` runs in each copy afterwards.</span>
+
+<span class="m">#  model                result  check  steps  tokens in/out  cost     time</span>
+1  claude-sonnet-5.5    done    <span class="a">pass</span>   5      19.8k / 495    $0.045   9.3s
+2  gpt-6.2-sol          done    <span class="a">pass</span>   16     35.3k / 495    $0.015   22.5s
+3  glm-5.3              done    <span class="a">pass</span>   6      15.2k / 212    $0.0068  11.7s
+
+<span class="w">◆ fastest passing: claude-sonnet-5.5 (9.3s) · cheapest passing: glm-5.3 ($0.0068)</span></pre>
+      </div>
+    </section>
+
+    <section class="block" id="source">
+      <h2>Read the whole harness.</h2>
+      <p class="sub">No framework, no hidden layers. The agent loop is one file. Everything else is a small module you can open and understand.</p>
+      <div class="files">
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/agent.ts"><code>src/agent.ts</code><span class="n">175</span><span>The loop: a streamed ToolLoopAgent, per-step model hot-swap, context pruning.</span></a>
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/session.ts"><code>src/session.ts</code><span class="n">130</span><span>One conversation: model, tools, history, checkpoints.</span></a>
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/prompt.ts"><code>src/prompt.ts</code><span class="n">39</span><span>The system prompt. Short on purpose: about 1.4k tokens of overhead per step.</span></a>
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/providers.ts"><code>src/providers.ts</code><span class="n">134</span><span>19 providers, one row each. Add your own endpoint in config.</span></a>
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/approval.ts"><code>src/approval.ts</code><span class="n">94</span><span>Ask, accept edits, plan and bypass modes. Chained shell commands always ask.</span></a>
+        <a href="https://github.com/Ankit6055/lex/blob/main/src/checkpoints.ts"><code>src/checkpoints.ts</code><span class="n">95</span><span>Snapshots before each turn, kept outside your repo. Powers /undo.</span></a>
+        <a href="https://github.com/Ankit6055/lex/tree/main/src/tools"><code>src/tools/</code><span class="n">1,089</span><span>read, ls, grep, write, edit, bash, todo, ask_user, remember, load_skill, task.</span></a>
+        <div class="total"><span>All of src/, including the terminal UI</span><span>5,124 lines · 194 tests</span></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Your key, any model.</h2>
+      <p class="sub">Set one environment variable or run lex login. Bare ids route to the direct provider when you have its key and through the gateway otherwise. Local models cost nothing.</p>
+      <div class="providers">
+        <span class="rec">gateway</span><span>anthropic</span><span>openai</span><span>openrouter</span><span>google</span><span>xai</span><span>deepseek</span><span>mistral</span><span>groq</span><span>cerebras</span><span>together</span><span>fireworks</span><span>moonshot</span><span>zai</span><span>minimax</span><span>nvidia</span><span>huggingface</span><span>ollama</span><span>lmstudio</span>
+      </div>
+    </section>
+
+    <section class="block cta">
+      <div>
+        <h2>Open a terminal and try it.</h2>
+        <p class="sub">Set AI_GATEWAY_API_KEY, or any provider's key, then run it in a project.</p>
+      </div>
+      <div class="install"><code>npx @ankit6055/lex</code><button type="button" class="copy2" aria-label="Copy install command">Copy</button></div>
+    </section>
+
+    <footer>
+      <span>lex is MIT licensed.</span>
+      <span><a href="https://github.com/Ankit6055/lex">GitHub</a> · <a href="https://www.npmjs.com/package/@ankit6055/lex">npm</a></span>
+    </footer>
+  </div>
+</div>
+<div class="below"></div>
+
+<script>
+  const LAYERS = {
+    model: {
+      k: "layer 1 · model",
+      title: "Swap the model, keep the conversation.",
+      body: ["Pick from 19 providers with your own key, or point lex at any OpenAI-compatible endpoint.", "Press ctrl+p while a task is running and the very next step runs on the new model, with the history intact."],
+      pre: '<span class="s">5 steps · 10.1k in / 220 out · 6.1s ·</span> claude-haiku-5.5 <span class="a">→</span> gpt-6.2-sol',
+    },
+    loop: {
+      k: "layer 2 · loop",
+      title: "A loop you can read in one sitting.",
+      body: ["One streamed tool loop, rebuilt each turn from your project's instructions, memory and skills.", "Earlier tool output collapses to one-line notes, so a long session stays cheap without forgetting what it did."],
+      pre: '<span class="s">src/agent.ts</span>  175 lines\n<span class="s">overhead</span>      ~1.4k tokens per step',
+    },
+    tools: {
+      k: "layer 3 · tools",
+      title: "Tools with guardrails, and an undo.",
+      body: ["File tools can't leave your project. Edits and commands ask first; plan mode only reads.", "Every turn is checkpointed outside your repo. /undo puts the files back and tells the model."],
+      pre: '<span class="a">●</span> Update(src/math.js)\n  <span class="s">└</span> +1 −1\n<span class="s">/undo</span>  ↺ src/math.js',
+    },
+  };
+  const detail = document.getElementById("detail");
+  function show(name) {
+    const l = LAYERS[name];
+    detail.innerHTML = `<div class="k">${l.k}</div><h2>${l.title}</h2>${l.body.map((p) => `<p>${p}</p>`).join("")}<pre>${l.pre}</pre>`;
+    document.querySelectorAll(".layer").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.layer === name)));
+    document.querySelectorAll(".slab").forEach((s) => s.classList.toggle("on", s.dataset.layer === name));
+  }
+  document.querySelectorAll("[data-layer]").forEach((el) => {
+    el.addEventListener("click", () => show(el.dataset.layer));
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(el.dataset.layer); } });
+  });
+  show("model");
+
+  function copy(btn) {
+    const text = "npx @ankit6055/lex";
+    const done = () => { btn.textContent = "Copied"; setTimeout(() => (btn.textContent = "Copy"), 1600); };
+    try { navigator.clipboard.writeText(text).then(done, () => {}); } catch (e) {}
+  }
+  document.querySelectorAll("#copy, .copy2").forEach((b) => b.addEventListener("click", () => copy(b)));
+</script>
+</body>
+</html>
