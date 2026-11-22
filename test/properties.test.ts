@@ -81,7 +81,7 @@ test("tool-call cleanup keeps completed pairs in order and is idempotent", () =>
   }), options);
 });
 
-test("context pruning preserves prior conversation text and the entire small current turn", () => {
+test("context pruning keeps prior conversation text, notes each prior tool call in one line, and keeps the small current turn whole", () => {
   const messageText = fc.string({ unit: "binary", minLength: 1, maxLength: 80 });
   const earlierTurns = fc.array(fc.tuple(messageText, messageText), { maxLength: 12 });
   fc.assert(fc.property(earlierTurns, text, (turns, currentOutput) => {
@@ -91,7 +91,9 @@ test("context pruning preserves prior conversation text and the entire small cur
       const id = `prior-${index}`;
       const user: ModelMessage = { role: "user", content: question };
       const assistant: ModelMessage = { role: "assistant", content: [{ type: "text", text: answer }] };
-      conversation.push(user, assistant);
+      // The tool call and its full result collapse into a one-line note the model can still see.
+      const note: ModelMessage = { role: "assistant", content: [{ type: "text", text: "[read note.txt → old file body]" }] };
+      conversation.push(user, note, assistant);
       history.push(user, { role: "assistant", content: [readCall(id)] },
         { role: "tool", content: [readResult(id, "old file body")] }, assistant);
     });

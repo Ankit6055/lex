@@ -43,11 +43,51 @@ const TURN_BUDGET_CHARS = 400_000;
  *   unless it grows past the budget, in which case only its last 10 messages keep tool bodies.
  */
 export function contextFor(history: ModelMessage[], turn: ModelMessage[]): ModelMessage[] {
-  const past = pruneMessages({ messages: history, toolCalls: "all", emptyMessages: "remove" });
+  const past = compactHistory(history);
   const current = JSON.stringify(turn).length > TURN_BUDGET_CHARS
     ? pruneMessages({ messages: turn, toolCalls: "before-last-10-messages", emptyMessages: "remove" })
     : turn;
   return [...past, ...current];
+}
+
+const short = (v: unknown, n: number) => {
+  const s = (typeof v === "string" ? v : JSON.stringify(v) ?? "").replace(/\s+/g, " ").trim();
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+};
+
+/**
+ * Earlier turns: replace each tool call and its result with a one-line note
+ * ("[edit src/a.ts → Edited src/a.ts (+1 −1).]"), so the model remembers what it did
+ * without paying for full file contents and command output again.
+ */
+export function compactHistory(messages: ModelMessage[]): ModelMessage[] {
+  const results = new Map<string, string>();
+  for (const m of messages) {
+    if (m.role !== "tool") continue;
+    for (const p of m.content) {
+      if (p.type !== "tool-result") continue;
+      const out = p.output as { type?: string; value?: unknown };
+      const value = out && "value" in out ? out.value : out;
+      results.set(p.toolCallId, short(String(typeof value === "string" ? value : JSON.stringify(value)).split("\n")[0], 120));
+    }
+  }
+  const out: ModelMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "tool") continue;
+    if (m.role !== "assistant" || typeof m.content === "string") { out.push(m); continue; }
+    const content = m.content.flatMap((p) => {
+      if (p.type === "tool-call") {
+        const input = p.input as Record<string, unknown> | undefined;
+        const arg = input?.path ?? input?.command ?? input?.pattern ?? input?.description ?? input?.fact ?? input?.name ?? "";
+        const result = results.get(p.toolCallId);
+        return [{ type: "text" as const, text: `[${p.toolName}${arg ? ` ${short(arg, 80)}` : ""}${result ? ` → ${result}` : ""}]` }];
+      }
+      if (p.type === "tool-result" || p.type === "reasoning") return [];
+      return [p];
+    });
+    if (content.length) out.push({ ...m, content });
+  }
+  return out;
 }
 
 export interface TurnResult {

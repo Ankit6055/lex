@@ -7,6 +7,7 @@ import { resolveModel } from "./models.ts";
 import { buildTools } from "./tools/index.ts";
 import { loadContext } from "./context.ts";
 import { buildSystemPrompt } from "./prompt.ts";
+import { createCheckpoints, type UndoResult } from "./checkpoints.ts";
 
 const PLAN_MODE_NOTE = "\n\n<plan_mode>\nChanges are blocked. Investigate with read-only tools, then propose a short numbered plan and ask the user to approve it.\n</plan_mode>";
 
@@ -29,6 +30,8 @@ export interface Session {
   setModel(spec: string): Promise<ResolvedModel>;
   /** Forget the conversation and reset per-session tool state (todos). */
   clear(): void;
+  /** Put back the files changed by the most recent turn that changed any (null if there's nothing to undo). */
+  undo(): Promise<UndoResult | null>;
   /** Run one user turn. On error the history is rolled back, so the turn can simply be retried. */
   turn(input: string, o?: { signal?: AbortSignal; onChunk?: (c: Chunk) => void }): Promise<TurnResult>;
 }
@@ -39,6 +42,8 @@ export async function createSession(o: {
   approver: Approver;
   model?: string;
   maxSteps?: number;
+  /** Snapshot files before each turn for /undo (default true; compare's throwaway copies turn it off). */
+  checkpoints?: boolean;
 }): Promise<Session> {
   const memoryPath = path.join(o.root, ".lex", "memory.md");
   let model = await resolveModel(o.model);
@@ -46,6 +51,8 @@ export async function createSession(o: {
   const makeTools = () => buildTools({ root: o.root, approver: o.approver, io: o.io, memoryPath }, { getModel: () => model });
   let tools = makeTools();
   const messages: ModelMessage[] = [];
+  const checkpoints = o.checkpoints === false ? null : createCheckpoints(o.root);
+  const notes: string[] = []; // things the model should hear with the next message (e.g. an undo)
   const totals: SessionTotals = { turns: 0, steps: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0, ms: 0 };
 
   return {
@@ -68,9 +75,20 @@ export async function createSession(o: {
       tools = makeTools();
     },
 
+    async undo() {
+      const result = (await checkpoints?.undo()) ?? null;
+      if (result) {
+        const files = [...result.restored, ...result.removed];
+        notes.push(`I reverted your changes from the turn "${result.label}" (${files.join(", ")}). The files are back to how they were before it.`);
+      }
+      return result;
+    },
+
     async turn(input, t = {}) {
       const before = messages.length;
-      messages.push({ role: "user", content: input });
+      const content = notes.length ? `${notes.splice(0).join("\n")}\n\n${input}` : input;
+      messages.push({ role: "user", content });
+      await checkpoints?.before(input.replace(/\s+/g, " ").slice(0, 60));
       try {
         // Rebuilt every turn, so new memory, a swapped model or a mode change apply immediately.
         const ctx = await loadContext(o.root);
@@ -102,7 +120,10 @@ export async function createSession(o: {
         return result;
       } catch (e) {
         messages.length = before;
+        if (content !== input) notes.unshift(content.slice(0, content.length - input.length).trim()); // keep notes for the retry
         throw e;
+      } finally {
+        await checkpoints?.after();
       }
     },
   };

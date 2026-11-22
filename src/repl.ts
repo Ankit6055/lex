@@ -18,6 +18,7 @@ export interface ReplOptions { root: string; model?: string; mode: ApprovalMode;
 
 const HELP = `Commands
   /model [spec|n]  show the model and a numbered list, or switch (history is kept)
+  /undo            put back the files changed in the last turn
   /clear           start a fresh conversation
   /memory          show .lex/memory.md
   /todo            show the current todo list
@@ -102,6 +103,11 @@ export async function runRepl(o: ReplOptions): Promise<void> {
       const m = await session.setModel(pick);
       await saveConfig({ defaultModel: m.spec });
       say(`Switched to ${pc.cyan(m.spec)} (saved as your default). History kept (${session.messages.length} messages).`);
+    },
+    async undo() {
+      const r = await session.undo();
+      if (!r) return say(pc.dim("Nothing to undo: no turn has changed files yet."));
+      say(`Undid "${r.label}": ${[...r.restored.map((f) => `restored ${f}`), ...r.removed.map((f) => `removed ${f}`)].join(", ")}`);
     },
     async memory() {
       const memory = await readMemory(session.memoryPath);

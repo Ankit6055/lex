@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import type { ModelMessage } from "ai";
 import type { IO } from "../src/types.ts";
 import { createApprover } from "../src/approval.ts";
-import { dropDanglingToolCalls, contextFor } from "../src/agent.ts";
+import { dropDanglingToolCalls, contextFor, compactHistory } from "../src/agent.ts";
 
 test("approval prompts from parallel tool calls are shown one at a time", async () => {
   let active = 0, maxActive = 0;
@@ -62,4 +62,16 @@ test("contextFor drops tool bodies from earlier turns but keeps the current turn
   expect(json).toContain("old answer");          // but its conversation text stays
   for (const id of ["a", "b", "c"]) expect(json).toContain(`"toolCallId":"${id}"`); // current turn fully kept
   expect(out.slice(-turn.length)).toEqual(turn);
+});
+
+test("compactHistory turns earlier tool calls into one-line notes instead of dropping them", () => {
+  const out = compactHistory([
+    { role: "user", content: "fix it" },
+    { role: "assistant", content: [{ type: "tool-call", toolCallId: "e1", toolName: "edit", input: { path: "src/math.js", old_string: "a - b", new_string: "a + b" } }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId: "e1", toolName: "edit", output: { type: "text", value: "Edited src/math.js: replaced 1 occurrence (+1 −1).\nmore detail" } }] },
+    { role: "assistant", content: "Fixed." },
+  ]);
+  expect(out.map((m) => m.role)).toEqual(["user", "assistant", "assistant"]);
+  expect(JSON.stringify(out[1])).toContain("[edit src/math.js → Edited src/math.js: replaced 1 occurrence (+1 −1).]");
+  expect(JSON.stringify(out)).not.toContain("more detail");
 });

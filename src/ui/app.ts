@@ -398,6 +398,12 @@ export async function runTui(o: ReplOptions): Promise<void> {
       { name: "compare", args: "[task]", desc: "Run one task on several models side by side", run: compare },
       { name: "plan", desc: "Toggle plan mode (read-only: investigate and propose)", run: () => { session.approver.setMode(session.approver.mode === "readonly" ? "ask" : "readonly"); screen.render(); } },
       { name: "edits", desc: "Toggle accept-edits mode (still asks for commands)", run: () => { session.approver.setMode(session.approver.mode === "edits" ? "ask" : "edits"); screen.render(); } },
+      { name: "undo", desc: "Put back the files lex changed in its last turn", run: async () => {
+        const r = await session.undo();
+        if (!r) return void screen.print(t.shade("  Nothing to undo: no turn has changed files yet."));
+        const rows = [...r.restored.map((f) => `${t.aqua("↺")} ${t.mist(f)}`), ...r.removed.map((f) => `${t.coral("✕")} ${t.mist(f)} ${t.shade("(created by lex, removed)")}`)];
+        screen.print([`  ${t.aqua("●")} ${t.ink("Undid")} ${t.mist(`"${r.label}"`)}`, ...rows.map((l) => `    ${l}`), t.shade("    lex will be told on your next message.")].join("\n"));
+      } },
       { name: "clear", desc: "Start a fresh conversation", aliases: ["new"], run: () => { session.clear(); screen.print(t.shade("  Conversation cleared.")); } },
       { name: "memory", desc: "Show what lex remembers about this project", run: async () => {
         const mem = await readFile(session.memoryPath, "utf8").then((s) => s.trim(), () => "");

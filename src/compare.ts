@@ -72,7 +72,7 @@ async function runOne(o: CompareOptions, spec: string, signal: AbortSignal, labe
   try {
     out.spec = (await resolveModel(spec)).spec; // validate the spec before copying anything
     out.dir = await makeCopy(o.root, out.spec);
-    const copy = await createSession({ root: out.dir, io: silentIO, approver: createApprover(silentIO, "yolo"), model: out.spec, maxSteps: o.maxSteps });
+    const copy = await createSession({ root: out.dir, io: silentIO, approver: createApprover(silentIO, "yolo"), model: out.spec, maxSteps: o.maxSteps, checkpoints: false });
     const turn = await copy.turn(o.task, {
       signal,
       onChunk: (c) => {
