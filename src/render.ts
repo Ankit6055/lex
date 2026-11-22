@@ -27,6 +27,7 @@ export function callLabel(name: string, input: any): string {
     case "ask_user": return `ask_user ${quote(input?.question)}`;
     case "remember": return `remember ${quote(input?.fact)}`;
     case "task": return `task ${quote(input?.description)}`;
+    case "load_skill": return `load_skill ${input?.name ?? ""}`;
     default: return name;
   }
 }
