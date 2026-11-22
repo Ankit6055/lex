@@ -137,7 +137,8 @@ There's no sandbox, so lex relies on these instead:
 
 ```bash
 bun install
-bun test               # unit tests
+bun test               # unit, integration, regression, and property tests
+bun test test/properties.test.ts  # property tests only
 bun check              # type check
 bun run build          # bundle to dist/cli.js for Node 22+
 bash scripts/smoke.sh  # pack, clean-room install under Node, run it
@@ -145,5 +146,7 @@ bun src/cli.ts         # run from source
 ```
 
 `plan.md` is the build plan, and `examples/toy-repo` is a tiny project with a failing test for trying things out.
+
+Property tests run 500 generated cases per property without provider credentials. To replay a failure, pass the reported `seed` and `path` in that test's `fc.assert` options.
 
 MIT licensed.
