@@ -352,7 +352,8 @@ export async function runTui(o: ReplOptions): Promise<void> {
   async function switchModel(spec: string): Promise<void> {
     const m = await session.setModel(spec);
     await saveConfig({ defaultModel: m.spec }); // remembered for the next launch
-    screen.print(`  ${t.aqua("●")} ${t.mist("Model")} ${t.ink(m.spec)}${t.shade(" · saved as your default")}${session.messages.length ? t.shade(` · conversation continues (${session.messages.length} messages)`) : ""}`);
+    const note = busy ? " · takes over at the next step" : session.messages.length ? ` · conversation continues (${session.messages.length} messages)` : "";
+    screen.print(`  ${t.aqua(busy ? "⇄" : "●")} ${t.mist("Model")} ${t.ink(m.spec)}${t.shade(` · saved as your default${note}`)}`);
   }
 
   async function cycleModel(): Promise<void> {

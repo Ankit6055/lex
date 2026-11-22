@@ -66,7 +66,8 @@ export function tokensPerSecond(u: TurnUsage): number | undefined {
 
 export function formatFooter(u: TurnUsage, spec: string): string {
   const tps = tokensPerSecond(u);
-  return `${u.steps} step${u.steps === 1 ? "" : "s"} · ${fmtK(u.inputTokens)} in / ${fmtK(u.outputTokens)} out${tps ? ` · ${Math.round(tps)} tok/s` : ""} · ${(u.ms / 1000).toFixed(1)}s · ${spec}`;
+  const models = u.models && u.models.length > 1 ? u.models.map((m) => m.slice(m.lastIndexOf(m.includes("/") ? "/" : ":") + 1)).join(" → ") : spec;
+  return `${u.steps} step${u.steps === 1 ? "" : "s"} · ${fmtK(u.inputTokens)} in / ${fmtK(u.outputTokens)} out${tps ? ` · ${Math.round(tps)} tok/s` : ""} · ${(u.ms / 1000).toFixed(1)}s · ${models}`;
 }
 
 export function createRenderer(o: { spinner?: Spinner; out?: NodeJS.WritableStream; writeErr?: (s: string) => void } = {}) {

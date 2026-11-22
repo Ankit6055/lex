@@ -57,4 +57,6 @@ export interface TurnUsage {
   genMs?: number;
   /** Output tokens produced during `genMs` (steps too short to time are left out). */
   genTokens?: number;
+  /** Models that ran this turn's steps, in order of first use (more than one after a mid-turn swap). */
+  models?: string[];
 }

@@ -74,13 +74,17 @@ export async function createSession(o: {
       try {
         // Rebuilt every turn, so new memory, a swapped model or a mode change apply immediately.
         const ctx = await loadContext(o.root);
+        const used: string[] = [];
         const agent = createAgent({
           model,
           tools,
           instructions: buildSystemPrompt({ ...ctx, toolNames: Object.keys(tools) }) + (o.approver.mode === "readonly" ? PLAN_MODE_NOTE : ""),
           maxSteps: o.maxSteps,
+          currentModel: () => model,
+          onStepModel: (spec) => { if (used[used.length - 1] !== spec) used.push(spec); },
         });
         const result = await runTurn(agent, messages, t);
+        result.usage.models = used;
         if (result.aborted) {
           // Keep finished work, and record the cancel so the model doesn't resume the request later.
           messages.push(...dropDanglingToolCalls(result.responseMessages), { role: "assistant", content: CANCELLED_NOTE });

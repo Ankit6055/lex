@@ -12,6 +12,10 @@ export function createAgent(o: {
   tools: Record<string, Tool>;
   instructions: string;
   maxSteps?: number;
+  /** Hot-swap: read before every step, so a model switched mid-turn takes over at the next step. */
+  currentModel?: () => ResolvedModel;
+  /** Called with the model spec each step runs on. */
+  onStepModel?: (spec: string) => void;
 }): LexAgent {
   return new ToolLoopAgent({
     model: o.model.model,
@@ -21,7 +25,11 @@ export function createAgent(o: {
     // Run a step's tool calls one at a time, in the order the model issued them, so "edit, then run
     // the tests" means exactly that (parallel execution let the test run see the old file).
     toolCallConcurrency: 1,
-    prepareStep: ({ initialMessages, responseMessages }) => ({ messages: contextFor(initialMessages, responseMessages) }),
+    prepareStep: ({ initialMessages, responseMessages }) => {
+      const m = o.currentModel?.() ?? o.model;
+      o.onStepModel?.(m.spec);
+      return { model: m.model, messages: contextFor(initialMessages, responseMessages) };
+    },
   });
 }
 
