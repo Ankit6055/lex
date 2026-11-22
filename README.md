@@ -2,6 +2,8 @@
 
 ![Lex running in the terminal, showing the startup banner, selected model, and prompt](docs/lex-terminal.png)
 
+[Watch the Lex demo on Google Drive](https://drive.google.com/file/d/1RlC1GBGPRzCb9zrqRU85cTlKMXddtYzA/view?usp=sharing)
+
 Lex is an open-source AI coding agent for your terminal. It reads and edits project files, runs commands with your approval, and streams its work as it goes. Use a hosted model with your own API key or connect to a local model through Ollama or LM Studio.
 
 - **Work interactively or run once.** Use the terminal UI for ongoing work, or pass a prompt on the command line for a single streamed response.
