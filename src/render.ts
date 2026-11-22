@@ -63,10 +63,10 @@ export function formatFooter(u: TurnUsage, spec: string): string {
   return `${u.steps} step${u.steps === 1 ? "" : "s"} · ${fmtK(u.inputTokens)} in / ${fmtK(u.outputTokens)} out · ${(u.ms / 1000).toFixed(1)}s · ${spec}`;
 }
 
-export function createRenderer(o: { spinner?: Spinner; out?: NodeJS.WritableStream; err?: NodeJS.WritableStream } = {}) {
+export function createRenderer(o: { spinner?: Spinner; out?: NodeJS.WritableStream; writeErr?: (s: string) => void } = {}) {
   const spinner = o.spinner ?? noSpinner;
   const out = o.out ?? process.stdout;
-  const err = o.err ?? process.stderr;
+  const err = { write: o.writeErr ?? ((s: string) => void process.stderr.write(s)) };
   const calls = new Map<string, { name: string; input: unknown }>();
   let midLine = false; // stdout has text without a trailing newline
 

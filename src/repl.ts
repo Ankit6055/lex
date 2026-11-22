@@ -5,7 +5,7 @@ import path from "node:path";
 import pc from "picocolors";
 import pkg from "../package.json" with { type: "json" };
 import type { ApprovalMode, IO, ModelInfo } from "./types.ts";
-import { createIO, closeIO, startSpinner, stopSpinner } from "./io.ts";
+import { createIO, closeIO, startSpinner, stopSpinner, writeWhenIdle } from "./io.ts";
 import { createApprover } from "./approval.ts";
 import { createSession, type Session } from "./session.ts";
 import { ModelError, NO_KEY_MESSAGE, suggestedModels } from "./models.ts";
@@ -140,7 +140,7 @@ export async function runRepl(o: ReplOptions): Promise<void> {
       }
 
       controller = new AbortController();
-      const renderer = createRenderer({ spinner: { start: startSpinner, stop: stopSpinner } });
+      const renderer = createRenderer({ spinner: { start: startSpinner, stop: stopSpinner }, writeErr: writeWhenIdle });
       try {
         const turn = await session.turn(input, { signal: controller.signal, onChunk: renderer.onChunk });
         renderer.footer(turn.usage, session.model.spec);

@@ -8,7 +8,7 @@ import type { ApprovalMode } from "./types.ts";
 import { ModelError, NO_KEY_MESSAGE, listAvailable } from "./models.ts";
 import { login, redact } from "./auth.ts";
 import { createRenderer } from "./render.ts";
-import { createIO, startSpinner, stopSpinner } from "./io.ts";
+import { createIO, startSpinner, stopSpinner, writeWhenIdle } from "./io.ts";
 import { createApprover } from "./approval.ts";
 import { createSession } from "./session.ts";
 import { BUILTIN_PROVIDERS } from "./providers.ts";
@@ -59,7 +59,7 @@ async function oneShot(o: { root: string; prompt: string; model?: string; mode: 
   };
   process.on("SIGINT", onSigint);
 
-  const renderer = createRenderer({ spinner: { start: startSpinner, stop: stopSpinner } });
+  const renderer = createRenderer({ spinner: { start: startSpinner, stop: stopSpinner }, writeErr: writeWhenIdle });
   try {
     const turn = await session.turn(o.prompt, { signal: controller.signal, onChunk: renderer.onChunk });
     renderer.footer(turn.usage, session.model.spec);

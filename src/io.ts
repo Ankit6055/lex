@@ -35,6 +35,7 @@ function drawSpinner(): void {
 export function startSpinner(label = "thinking"): void {
   spinnerLabel = label;
   if (!process.stderr.isTTY) return;
+  if (waiter) return; // never draw over a prompt; withPaused restarts the spinner afterwards
   if (spinnerTimer) return;
   spinnerFrame = 0;
   drawSpinner();
@@ -53,6 +54,19 @@ export function stopSpinner(): void {
 /** True while the spinner is drawing. */
 export function isSpinning(): boolean {
   return spinnerTimer !== null;
+}
+
+/** Lines that arrived while a prompt was waiting (e.g. a parallel tool finishing); flushed when it's answered. */
+const deferred: string[] = [];
+
+/** Write to stderr now, or right after the current prompt is answered if one is waiting. */
+export function writeWhenIdle(s: string): void {
+  if (waiter) deferred.push(s);
+  else process.stderr.write(s);
+}
+
+function flushDeferred(): void {
+  if (deferred.length) process.stderr.write(deferred.splice(0).join(""));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -168,6 +182,7 @@ function readLine(label: string, opts: { mask?: boolean } = {}): Promise<string 
         if (process.stdin.isTTY) process.stderr.write("\n");
       }
       idle();
+      flushDeferred();
       resolve(line);
     };
     if (head) process.stderr.write(head);
