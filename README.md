@@ -1,153 +1,146 @@
-# lex
+# Lex
 
-A minimal, open-source AI coding harness for your terminal. It's about 3k lines of TypeScript you can read in an afternoon.
-Model, tools, memory, loop. Bring your own key: no OAuth, no account, your credits. 19 providers built in.
+Lex is an open-source AI coding agent for your terminal. It reads and edits project files, runs commands with your approval, and streams its work as it goes. Use a hosted model with your own API key or connect to a local model through Ollama or LM Studio.
 
-## Try it (60 seconds)
+- **Work interactively or run once.** Use the terminal UI for ongoing work, or pass a prompt on the command line for a single streamed response.
+- **Switch models during a task.** The new model takes over at the next agent step and keeps the conversation. Run the same task on several models to compare their results and diffs.
+- **Control changes.** Review edits and commands, use plan mode to investigate, and restore project files with `/undo`.
+- **Teach Lex your project.** Add repository instructions, save durable facts, and keep reusable workflows in skills.
 
-```bash
-export AI_GATEWAY_API_KEY=...       # recommended: one key, hundreds of models
-# or ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ... (see Providers), or: npx @ankit6055/lex login
-cd your-project
-npx @ankit6055/lex                  # interactive session
-npx @ankit6055/lex "fix the failing test"   # one-shot: run, print, exit
-```
+## Get started
 
-Install it globally (`npm i -g @ankit6055/lex`) and the command is just `lex`. Requires Node 22+.
-
-## Swap the model
+Use Node.js 22 or later to run the bundled CLI, Bun to build it from source, and Git for checkpoints and model comparisons.
 
 ```bash
-lex --model gateway:openai/gpt-6.2-sol
-lex --model anthropic:claude-opus-5-5
-lex --model groq:openai/gpt-oss-120b
-lex --model ollama:qwen3:8b          # local, no key
-lex models                           # every model your keys can reach
+git clone https://github.com/Ankit6055/lex.git
+cd lex
+bun install
+bun run build
+
+node dist/cli.js login
+node dist/cli.js --cwd /path/to/project
 ```
 
-Inside a session, `/model gemini-4-neon` switches mid-conversation and the history is kept, so a model from another lab picks up where the last one stopped. `/model` alone shows a numbered list.
-
-## Same task, two models
+You can also set a provider's environment variable, such as `AI_GATEWAY_API_KEY`, before launching. For local models, start the server and specify a model that supports tool calling.
 
 ```bash
-lex compare --models gateway:anthropic/claude-sonnet-5.5,gateway:openai/gpt-6.2-sol "add input validation to createUser"
+node dist/cli.js --cwd /path/to/project --model ollama:qwen3:8b
+node dist/cli.js --cwd /path/to/project --readonly "Explain how tests are organized"
 ```
 
-Each model runs in parallel, in its own throwaway git copy of your project. Lex prints a table (result, steps, tool calls, tokens, time, files changed), each model's final message and diff stat, and the temp paths so you can inspect them. Add `--diff` for full diffs. Your files are never touched.
+The examples below use `lex` for the CLI. In a source checkout, substitute `node /path/to/lex/dist/cli.js`. To make `lex` available from any directory, run `npm install -g .` from the built checkout.
 
-## The session
+## Terminal UI
 
-A real run against [`examples/toy-repo`](examples/toy-repo):
+Run `lex` without a prompt to start an interactive session. The composer supports multiline input, prompt history, file and command completion, and follow-ups queued while the agent works. The transcript shows tool calls and results, and the status area shows elapsed time, output tokens, and generation speed when available.
 
+| Input | What it does |
+|---|---|
+| `/` | Find slash commands. |
+| `@filename` | Complete a project file reference in your prompt. |
+| `# fact` | Save a durable fact to project memory. |
+| `!command` | Run a shell command yourself. Lex attaches a capped excerpt of its output to your next prompt. |
+| `Shift+Tab` | Cycle approval modes. |
+| `Ctrl+L` / `Ctrl+P` | Open the model picker / cycle through suggested models. |
+| `Ctrl+G` | Edit the current prompt in `$VISUAL` or `$EDITOR`. |
+| `Alt+Enter` / backslash then Enter | Start a new line. |
+| `Esc` | Interrupt an active turn when the composer menu is closed. |
+| `Ctrl+C` / `Ctrl+D` | Clear a draft or interrupt with `Ctrl+C`. At an idle, empty prompt, press `Ctrl+C` twice or `Ctrl+D` once to quit. |
+| `?` on an empty prompt | Show shortcuts. |
+
+| Command | What it does |
+|---|---|
+| `/model [spec]` | Pick or switch models. The conversation stays open and the selection is saved as your default. |
+| `/compare [task]` | Pick two or more models and run the same task on each. |
+| `/plan`, `/edits`, `/yolo` | Toggle plan, accept-edits, or bypass mode. |
+| `/undo` | Restore files from the checkpoint before the most recent recorded turn that changed files. |
+| `/clear`, `/new` | Start a fresh conversation. |
+| `/memory`, `/remember <fact>` | View or add project memory. |
+| `/todo`, `/usage` | Inspect the current checklist or session usage. |
+| `/login`, `/help`, `/exit` | Save a provider key, see help, or quit. |
+
+Set `LEX_PLAIN=1` to use the line-based interface. Lex also selects it when input or output is piped. In that interface, `/readonly` toggles read-only mode and `/model` shows a numbered list. Use `NO_COLOR=1` to disable colors. In one-shot mode the response goes to stdout, with tool activity and usage on stderr. Use `lex --help` for flags, including `--cwd`, `--max-steps` (25 by default), and `-m` / `--model`.
+
+## Approvals and undo
+
+| Mode | Agent behavior |
+|---|---|
+| Ask (default) | Prompts for file changes and shell commands outside the built-in allowlist. Approval can apply once or for the session. |
+| Accept edits (`/edits`) | Automatically allows file writes and edits. Shell approvals still apply. |
+| Plan (`/plan` or `--readonly`) | Guides the model to investigate and propose changes. The approval gate blocks file writes, edits, and shell commands outside the allowlist. |
+| Bypass (`/yolo` or `--yolo`) | Runs agent tools without approval prompts. |
+
+File tools check that paths resolve inside the project root. Shell commands run with your user permissions. The `!` shortcut runs commands you type directly.
+
+Before a turn, Lex can snapshot the project in a private Git repository under `~/.lex/checkpoints/`. `/undo` restores files captured by the checkpoint and removes files added since it. It can also revert manual edits made since that checkpoint. Checkpoints use Git's file selection and work for projects without their own Git repository.
+
+## Compare models
+
+```bash
+lex compare --models gateway:anthropic/claude-sonnet-5.5,gateway:openai/gpt-6.2-sol \
+  --diff "Add input validation to createUser"
 ```
-lex 0.2.0 · gateway:anthropic/claude-sonnet-5.5
-~/code/toy-repo (main) · instructions: AGENTS.md · memory: 0 entries
-/help for commands · Ctrl-C cancels a turn · Ctrl-D exits
 
-› fix the failing test
-Allow bash: npm test 2>&1 | tail -40 ? [y]es / [n]o / [a]lways for "npm test 2>&1 | tail -40" y
-● bash npm test 2>&1 | tail -40 → exit 0
-● ls . → 5 entries
-● bash cat src/*.js test/math.test.js → exit 0
-@@ line 2 @@
-- return a - b;
-+ return a + b;
-Allow edit: src/math.js (+1 −1) ? [y]es / [n]o / [a]lways for all edit calls this session y
-● edit src/math.js (+1 −1)
-Allow bash: npm test 2>&1 | grep -E "^ℹ (pass|fail)" ? [y]es / [n]o / [a]lways for "npm test 2>&1 | grep -E "^ℹ (pass|fail)"" y
-● bash npm test 2>&1 | grep -E "^ℹ (pass|fail)" → exit 0
-I fixed the failing test. `add` in `src/math.js` was subtracting (`a - b`), and I changed it to `a + b`. That also fixed the `average` test, because `average` calls `add`.
+In a terminal you can omit `--models` to open the picker. Lex runs each model in parallel in a separate temporary Git copy and prints its result, steps, tool calls, token usage, elapsed time, changed files, and copy path. Use `--diff` to include the full diffs. Compare runs agents unattended and links an existing `node_modules` directory from the source project.
 
-I re-ran `npm test` afterwards: 4 tests pass and 0 fail.
-4 steps · 33.6k in / 443 out · 8.6s · gateway:anthropic/claude-sonnet-5.5
-```
+## Providers and configuration
 
-Commands: `/model [spec|n]`, `/clear`, `/memory`, `/todo`, `/usage`, `/yolo`, `/readonly`, `/login`, `/help`, `/exit`. Ctrl-C cancels a running turn (including at an approval prompt), and Ctrl-D exits.
+Lex supports 19 built-in providers. Use `lex login` to save a key in `~/.lex/auth.json` with owner-only permissions, or set the matching environment variable. Environment keys take precedence.
 
-## How it works
+| Provider ID | API key variable | Provider ID | API key variable |
+|---|---|---|---|
+| `gateway` | `AI_GATEWAY_API_KEY` | `groq` | `GROQ_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` | `cerebras` | `CEREBRAS_API_KEY` |
+| `openai` | `OPENAI_API_KEY` | `together` | `TOGETHER_API_KEY` |
+| `openrouter` | `OPENROUTER_API_KEY` | `fireworks` | `FIREWORKS_API_KEY` |
+| `google` | `GEMINI_API_KEY` | `moonshot` | `MOONSHOT_API_KEY` |
+| `xai` | `XAI_API_KEY` | `zai` | `ZAI_API_KEY` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `minimax` | `MINIMAX_API_KEY` |
+| `mistral` | `MISTRAL_API_KEY` | `nvidia` | `NVIDIA_API_KEY` |
+| `huggingface` | `HF_TOKEN` | `ollama`, `lmstudio` | Local, no key |
 
-```
- you ──► repl.ts / cli.ts ──► session.ts ──────────────► agent.ts (ToolLoopAgent)
-                                │  history, model,           │  model ⇄ tool calls, ≤25 steps
-                                │  approvals                 ▼
-                                │                      tools/*  read ls grep write edit bash
-                                │                               todo ask_user remember load_skill task
-                                ▼                            │  path guard · output caps · approval gate
-                     prompt.ts + context.ts                  ▼
-                     (cwd, git, AGENTS.md, memory, skills)   render.ts ──► your terminal
-```
+Run `lex models` to see available model specs. Use `provider:model` for an exact choice, a provider name such as `deepseek` for its default, or a recognized bare model ID. For example, a bare `claude-*` model uses Anthropic when an Anthropic key is configured and AI Gateway otherwise.
 
-- **Loop** ([`agent.ts`](src/agent.ts)): an AI SDK `ToolLoopAgent` with a step cap, streamed one turn at a time. Before each step, tool output from earlier turns is pruned and the current turn is kept whole, so the model never forgets the file it just read.
-- **Model** ([`providers.ts`](src/providers.ts), [`models.ts`](src/models.ts), [`auth.ts`](src/auth.ts)): a one-row-per-provider registry, spec parsing (`provider:model`, bare ids, provider defaults picked from each provider's live catalog), and keys from env vars or `~/.lex/auth.json` (chmod 600).
-- **Tools** ([`tools/`](src/tools)): every tool returns a string (errors included), caps its output and says when it cut something. `task` runs a read-only explorer subagent on a cheaper model, and `load_skill` loads `skills/<name>/SKILL.md` on demand.
-- **Context** ([`prompt.ts`](src/prompt.ts), [`context.ts`](src/context.ts)): the system prompt is rebuilt every turn from the cwd, git branch, the nearest `AGENTS.md` / `CLAUDE.md` / `LEX.md`, memory and skills.
-- **Memory**: `.lex/memory.md` in your project. The agent appends durable facts with `remember`, and they're loaded into every session.
-- **Session** ([`session.ts`](src/session.ts), [`repl.ts`](src/repl.ts), [`compare.ts`](src/compare.ts)): one conversation (model, tools, history) shared by one-shot mode, the REPL and compare.
-- **Safety** ([`approval.ts`](src/approval.ts), [`util/paths.ts`](src/util/paths.ts)): see below.
+Model selection checks `--model`, then `LEX_MODEL`, then `defaultModel` in `~/.lex/config.json`, followed by the first configured hosted provider. Set `LEX_HOME` to change the directory that holds configuration, credentials, user skills, and checkpoints.
 
-## Providers
-
-Bring your own key for any of these (set the env var, or run `lex login`).
-
-| Provider | Key | | Provider | Key |
-|---|---|---|---|---|
-| `gateway` (recommended) | `AI_GATEWAY_API_KEY` | | `groq` | `GROQ_API_KEY` |
-| `anthropic` | `ANTHROPIC_API_KEY` | | `cerebras` | `CEREBRAS_API_KEY` |
-| `openai` | `OPENAI_API_KEY` | | `together` | `TOGETHER_API_KEY` |
-| `openrouter` | `OPENROUTER_API_KEY` | | `fireworks` | `FIREWORKS_API_KEY` |
-| `google` | `GEMINI_API_KEY` | | `moonshot` | `MOONSHOT_API_KEY` |
-| `xai` | `XAI_API_KEY` | | `zai` | `ZAI_API_KEY` |
-| `deepseek` | `DEEPSEEK_API_KEY` | | `minimax` | `MINIMAX_API_KEY` |
-| `mistral` | `MISTRAL_API_KEY` | | `nvidia` | `NVIDIA_API_KEY` |
-| `ollama`, `lmstudio` (local) | none | | `huggingface` | `HF_TOKEN` |
-
-Model specs can be `provider:model` (`groq:openai/gpt-oss-120b`, `ollama:qwen3:8b`), a provider name for its default model (`--model deepseek`), or a bare id (`claude-opus-5-5`, `gemini-4-neon`, `grok-4.7`, `zai/glm-5.3`). A bare id goes to the direct provider if you have its key, otherwise through the gateway. Override any base URL with `<PROVIDER>_BASE_URL` (e.g. `OLLAMA_BASE_URL`). Set a default with `LEX_MODEL` or `"defaultModel"` in `~/.lex/config.json`.
-
-Add any OpenAI-compatible endpoint (vLLM, LiteLLM, a company proxy) in `~/.lex/config.json`:
+Add a custom OpenAI-compatible endpoint in `~/.lex/config.json`. Set `apiKeyEnv` when the endpoint requires a key. OpenAI-compatible adapters also accept a `<PROVIDER>_BASE_URL` override, such as `OLLAMA_BASE_URL`.
 
 ```json
-{ "providers": { "vllm": { "baseURL": "http://localhost:8000/v1", "apiKeyEnv": "VLLM_API_KEY", "models": ["qwen3"] } } }
+{
+  "defaultModel": "vllm:qwen3",
+  "providers": {
+    "vllm": {
+      "baseURL": "http://localhost:8000/v1",
+      "models": ["qwen3"]
+    }
+  }
+}
 ```
 
-## Skills
+## Project context and tools
 
-Put instructions in `skills/<name>/SKILL.md` (project) or `~/.lex/skills/<name>/SKILL.md` (yours):
+- **Instructions.** Lex looks for the nearest `AGENTS.md`, `CLAUDE.md`, or `LEX.md` between the working directory and the Git root.
+- **Memory.** Project facts live in `.lex/memory.md` and are loaded into future sessions. Use `# fact`, `/remember`, or ask the agent to remember a convention.
+- **Skills.** Put a `SKILL.md` with a name, description, and instructions in `skills/<name>/` in the project or under `~/.lex/skills/<name>/`. Lex lists the names and descriptions in the prompt and loads the full instructions on demand. Project skills take precedence when names match.
+- **Tools.** The agent can list, search, read, write, and edit files, run shell commands, track todos, and ask questions. The `task` tool delegates exploration to a read-only subagent and can use a cheaper model when one is available.
 
-```markdown
----
-name: release
-description: How to cut a release of this project
----
-1. Bump the version in package.json ...
-```
+The [agent loop](src/agent.ts) runs tool calls in order. It turns earlier tool exchanges into short notes and keeps current-turn results until the context budget requires pruning. For implementation details, see the [session](src/session.ts), [terminal UI](src/ui/), and [provider registry](src/providers.ts).
 
-Only each skill's name and description go into the prompt. The agent loads the full text with `load_skill` when a task matches.
-
-## Safety
-
-There's no sandbox, so lex relies on these instead:
-- **Path guard:** file tools can't leave the project directory, and that includes symlinks pointing outside it.
-- **Approval:** `bash`, `write` and `edit` ask before running. Answer `[y]es`, `[n]o`, or `[a]lways` for the rest of the session.
-- **Safe commands:** a few read-only commands (`ls`, `cat`, `git status`, …) run without asking, but only when they contain no `;`, `&&`, `|`, `>`, `$(` or backticks.
-- **Modes:** `--readonly` refuses all changes, and `--yolo` allows everything.
-- **compare** runs unattended, but only inside throwaway temp copies.
-- **Keys** are never printed. Anything key-shaped is redacted from error messages.
-
-## Develop
+## Develop and verify
 
 ```bash
 bun install
-bun test               # unit, integration, regression, and property tests
-bun test test/properties.test.ts  # property tests only
-bun check              # type check
-bun run build          # bundle to dist/cli.js for Node 22+
-bash scripts/smoke.sh  # pack, clean-room install under Node, run it
-bash scripts/smoke.sh --live  # also verify a read-only turn with a configured provider key
-bun src/cli.ts         # run from source
+bun run dev
+bun run typecheck
+bun test
+bun test test/properties.test.ts
+bun run build
+bash scripts/smoke.sh
+bash scripts/smoke.sh --live
 ```
 
-`plan.md` is the build plan, and `examples/toy-repo` is a tiny project with a failing test for trying things out.
+The default test suite covers unit behavior, CLI and agent integration, regressions, and property tests. Property tests run 500 generated cases per property. Replay a failure with the reported `seed` and `path` in that test's `fc.assert` options. The optional live smoke test uses a configured provider key and verifies a read-only tool round trip from a clean package install.
 
-Property tests run 500 generated cases per property without provider credentials. To replay a failure, pass the reported `seed` and `path` in that test's `fc.assert` options.
+Try the [toy repository](examples/toy-repo) for a small project with a failing test. The [build plan](plan.md) describes how the core was designed.
 
-MIT licensed.
+[MIT license](LICENSE).
