@@ -51,7 +51,7 @@ export function resultSuffix(name: string, input: any, output: unknown): string 
       return /timed out/i.test(out) ? pc.red(" → timed out") : "";
     }
     case "write": return ` (${lineCount(input?.content)} lines)`;
-    case "edit": return ` (+${lineCount(input?.new_string)} −${lineCount(input?.old_string)})`;
+    case "edit": return ` ${out.match(/\(\+\d+ −\d+\)/)?.[0] ?? `(+${lineCount(input?.new_string)} −${lineCount(input?.old_string)})`}`;
     case "ask_user": return ` → ${quote(out, 50)}`;
     default: return "";
   }
