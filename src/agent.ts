@@ -18,6 +18,9 @@ export function createAgent(o: {
     instructions: o.instructions,
     tools: o.tools,
     stopWhen: isStepCount(o.maxSteps ?? 25),
+    // Run a step's tool calls one at a time, in the order the model issued them, so "edit, then run
+    // the tests" means exactly that (parallel execution let the test run see the old file).
+    toolCallConcurrency: 1,
     prepareStep: ({ initialMessages, responseMessages }) => ({ messages: contextFor(initialMessages, responseMessages) }),
   });
 }
