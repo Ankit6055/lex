@@ -36,6 +36,7 @@ Options
       --readonly       refuse writes, edits and non-safe bash
       --cwd <dir>      project root (default: current directory)
       --max-steps <n>  tool-loop step cap (default 25)
+      --check <cmd>    compare: pass/fail command run in each copy (default: npm test if defined)
   -v, --version
   -h, --help
 
@@ -83,6 +84,7 @@ async function main(): Promise<number> {
         cwd: { type: "string" },
         "max-steps": { type: "string" },
         diff: { type: "boolean" },
+        check: { type: "string" },
         version: { type: "boolean", short: "v" },
         help: { type: "boolean", short: "h" },
       },
@@ -126,7 +128,7 @@ async function main(): Promise<number> {
         if (!models.length) return 0;
       }
       if (models.length < 2) fail('Usage: lex compare --models a,b "task" (pick at least two models)');
-      await runCompare({ root, models, task: rest.join(" "), diff: v.diff, maxSteps });
+      await runCompare({ root, models, task: rest.join(" "), diff: v.diff, maxSteps, check: v.check });
       return 0;
     }
   }
