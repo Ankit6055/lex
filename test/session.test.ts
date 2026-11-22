@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import type { ModelMessage } from "ai";
 import type { IO } from "../src/types.ts";
 import { createApprover } from "../src/approval.ts";
-import { dropDanglingToolCalls } from "../src/agent.ts";
+import { dropDanglingToolCalls, contextFor } from "../src/agent.ts";
 
 test("approval prompts from parallel tool calls are shown one at a time", async () => {
   let active = 0, maxActive = 0;
@@ -46,4 +46,20 @@ test("dropDanglingToolCalls removes tool calls without results and empty message
   expect(out).toHaveLength(2);
   const first = out[0]!;
   expect(first.role === "assistant" && Array.isArray(first.content) && first.content.map((p) => p.type)).toEqual(["text", "tool-call"]);
+});
+
+test("contextFor drops tool bodies from earlier turns but keeps the current turn intact", () => {
+  const call = (id: string) => ({ role: "assistant" as const, content: [{ type: "tool-call" as const, toolCallId: id, toolName: "read", input: { path: "a" } }] });
+  const result = (id: string) => ({ role: "tool" as const, content: [{ type: "tool-result" as const, toolCallId: id, toolName: "read", output: { type: "text" as const, value: "file body" } }] });
+  const history: ModelMessage[] = [
+    { role: "user", content: "first question" }, call("old"), result("old"), { role: "assistant", content: "old answer" },
+    { role: "user", content: "second question" },
+  ];
+  const turn: ModelMessage[] = [call("a"), result("a"), call("b"), result("b"), call("c"), result("c")];
+  const out = contextFor(history, turn);
+  const json = JSON.stringify(out);
+  expect(json).not.toContain('"old"');           // earlier turn's tool call and result are gone
+  expect(json).toContain("old answer");          // but its conversation text stays
+  for (const id of ["a", "b", "c"]) expect(json).toContain(`"toolCallId":"${id}"`); // current turn fully kept
+  expect(out.slice(-turn.length)).toEqual(turn);
 });

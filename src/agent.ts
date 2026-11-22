@@ -18,11 +18,25 @@ export function createAgent(o: {
     instructions: o.instructions,
     tools: o.tools,
     stopWhen: isStepCount(o.maxSteps ?? 25),
-    // Context hygiene: drop tool call/result bodies older than the last 3 messages.
-    prepareStep: ({ messages }) => ({
-      messages: pruneMessages({ messages, toolCalls: "before-last-3-messages", emptyMessages: "remove" }),
-    }),
+    prepareStep: ({ initialMessages, responseMessages }) => ({ messages: contextFor(initialMessages, responseMessages) }),
   });
+}
+
+/** Past this size (in JSON chars, roughly 4 per token) the current turn's older tool output is pruned too. */
+const TURN_BUDGET_CHARS = 400_000;
+
+/**
+ * Context hygiene, run before every step:
+ * - earlier turns keep their conversation text but drop tool call/result bodies (stale, and the bulk of the tokens);
+ * - the current turn keeps everything, so the model never forgets a file it read two steps ago,
+ *   unless it grows past the budget, in which case only its last 10 messages keep tool bodies.
+ */
+export function contextFor(history: ModelMessage[], turn: ModelMessage[]): ModelMessage[] {
+  const past = pruneMessages({ messages: history, toolCalls: "all", emptyMessages: "remove" });
+  const current = JSON.stringify(turn).length > TURN_BUDGET_CHARS
+    ? pruneMessages({ messages: turn, toolCalls: "before-last-10-messages", emptyMessages: "remove" })
+    : turn;
+  return [...past, ...current];
 }
 
 export interface TurnResult {

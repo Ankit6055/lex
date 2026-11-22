@@ -17,7 +17,7 @@ const quote = (s: unknown, n = 40) => {
 const lineCount = (s: unknown) => (typeof s === "string" && s.length ? s.split("\n").length : 0);
 
 /** One-line label for a tool call, before it runs (used for the spinner). */
-function callLabel(name: string, input: any): string {
+export function callLabel(name: string, input: any): string {
   switch (name) {
     case "read": case "write": case "edit": return `${name} ${input?.path ?? ""}`;
     case "ls": return `ls ${input?.path ?? "."}${input?.pattern ? ` ${input.pattern}` : ""}`;
@@ -26,12 +26,13 @@ function callLabel(name: string, input: any): string {
     case "todo": return `todo ${input?.action ?? ""}${input?.description ? ` ${quote(input.description)}` : ""}`;
     case "ask_user": return `ask_user ${quote(input?.question)}`;
     case "remember": return `remember ${quote(input?.fact)}`;
+    case "task": return `task ${quote(input?.description)}`;
     default: return name;
   }
 }
 
 /** Short outcome suffix, after it runs, e.g. `(120 lines)`, `→ exit 1`, `(+3 −1)`. */
-function resultSuffix(name: string, input: any, output: unknown): string {
+export function resultSuffix(name: string, input: any, output: unknown): string {
   const out = typeof output === "string" ? output : JSON.stringify(output ?? "");
   if (/^User denied/.test(out)) return pc.yellow(" (denied)");
   if (/read-only/i.test(out) && /^(Error|Refused|Read-only|The session)/i.test(out)) return pc.yellow(" (read-only)");
