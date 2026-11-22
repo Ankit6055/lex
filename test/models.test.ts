@@ -3,6 +3,7 @@ import { mkdtemp, rm, stat, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseSpec, closeMatches, ModelError } from "../src/models.ts";
+import { allProviders, BUILTIN_PROVIDERS } from "../src/providers.ts";
 import { getKey, saveKey, redact } from "../src/auth.ts";
 import { formatFooter } from "../src/render.ts";
 
@@ -31,8 +32,26 @@ describe("parseSpec", () => {
   });
   test("bad specs throw ModelError with guidance", () => {
     expect(() => parseSpec("gogle:gemini", all)).toThrow(ModelError);
-    expect(() => parseSpec("gateway:", all)).toThrow(/Missing model id/);
     expect(() => parseSpec("sonnet", all)).toThrow(/provider:id/);
+  });
+  test("a bare provider name (or provider:) means that provider's default", () => {
+    expect(parseSpec("deepseek", none)).toEqual({ provider: "deepseek", id: "" });
+    expect(parseSpec("groq:", none)).toEqual({ provider: "groq", id: "" });
+  });
+  test("ids may contain colons and slashes (ollama tags, groq/openrouter ids)", () => {
+    expect(parseSpec("ollama:qwen3:8b", none)).toEqual({ provider: "ollama", id: "qwen3:8b" });
+    expect(parseSpec("groq:openai/gpt-oss-120b", none)).toEqual({ provider: "groq", id: "openai/gpt-oss-120b" });
+  });
+  test("bare gemini-* and grok-* route direct with a key, else via the gateway", () => {
+    expect(parseSpec("gemini-4-neon", all)).toEqual({ provider: "google", id: "gemini-4-neon" });
+    expect(parseSpec("gemini-4-neon", none)).toEqual({ provider: "gateway", id: "google/gemini-4-neon" });
+    expect(parseSpec("grok-4.7", all)).toEqual({ provider: "xai", id: "grok-4.7" });
+    expect(parseSpec("grok-4.7", none)).toEqual({ provider: "gateway", id: "spacexai/grok-4.7" });
+  });
+  test("custom providers from config are recognized", () => {
+    const providers = allProviders({ vllm: { baseURL: "http://box:8000/v1", models: ["qwen3"] } });
+    expect(parseSpec("vllm:qwen3", none, providers)).toEqual({ provider: "vllm", id: "qwen3" });
+    expect(() => parseSpec("vllm:qwen3", none)).toThrow(/Unknown provider/);
   });
 });
 
@@ -71,7 +90,18 @@ describe("auth", () => {
   });
 });
 
+test("registry: unique ids, keyed providers have an env var, remote compat providers have a base URL", () => {
+  const ids = BUILTIN_PROVIDERS.map((p) => p.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const p of BUILTIN_PROVIDERS) {
+    if (!p.local) expect(p.env).toBeTruthy();
+    if (p.kind === "openai-compatible") expect(p.baseURL).toMatch(/^https?:\/\//);
+    if (!p.local) expect(p.models.length).toBeGreaterThan(0);
+  }
+});
+
 test("redact hides key-shaped strings", () => {
+  expect(redact("gemini AIzaSyA1234567890abcdefghijklmnop groq gsk_abcdefghijkl")).not.toMatch(/AIzaSyA1|gsk_abcdefghijkl/);
   const s = redact('failed: vck_abcdefghijklmnop and sk-ant-api03-xyzxyzxyzxyz "authorization": "Bearer abc.def"');
   expect(s).not.toContain("abcdefghijklmnop");
   expect(s).not.toContain("xyzxyzxyzxyz");

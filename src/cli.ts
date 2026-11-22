@@ -11,8 +11,13 @@ import { createRenderer } from "./render.ts";
 import { createIO, startSpinner, stopSpinner } from "./io.ts";
 import { createApprover } from "./approval.ts";
 import { createSession } from "./session.ts";
+import { BUILTIN_PROVIDERS } from "./providers.ts";
 import { runRepl } from "./repl.ts";
 import { runCompare } from "./compare.ts";
+
+// Provider-compat warnings (e.g. one lab's message parts dropped after a /model swap) are harmless
+// and would clutter the terminal, so the SDK's warning logger is turned off.
+(globalThis as { AI_SDK_LOG_WARNINGS?: boolean }).AI_SDK_LOG_WARNINGS = false;
 
 const HELP = `lex ${pkg.version}: a minimal, open-source AI coding harness
 
@@ -24,7 +29,9 @@ Usage
   lex models                       list models your keys can reach
 
 Options
-  -m, --model <spec>   gateway:anthropic/claude-sonnet-5.5 | anthropic:claude-sonnet-5-5 | openai:gpt-6.2-sol
+  -m, --model <spec>   provider:model (e.g. gateway:openai/gpt-6.2-sol, groq:openai/gpt-oss-120b,
+                       ollama:qwen3:8b), a provider name for its default (e.g. deepseek), or a
+                       bare id (claude-opus-5-5, gemini-4-neon, grok-4.7, zai/glm-5.3)
       --yolo           allow every bash/write/edit without asking
       --readonly       refuse writes, edits and non-safe bash
       --cwd <dir>      project root (default: current directory)
@@ -32,7 +39,10 @@ Options
   -v, --version
   -h, --help
 
-Keys: AI_GATEWAY_API_KEY (recommended), ANTHROPIC_API_KEY, OPENAI_API_KEY, or \`lex login\`.`;
+Providers (bring your own key: set the env var, or run \`lex login\`)
+${BUILTIN_PROVIDERS.map((p) => `  ${p.id.padEnd(12)} ${(p.env ?? "(local, no key)").padEnd(22)} ${p.label}`).join("\n")}
+Add any OpenAI-compatible endpoint in ~/.lex/config.json:
+  { "providers": { "vllm": { "baseURL": "http://localhost:8000/v1", "models": ["qwen3"] } } }`;
 
 function fail(msg: string, code = 1): never {
   process.stderr.write(pc.red(redact(msg)) + "\n");

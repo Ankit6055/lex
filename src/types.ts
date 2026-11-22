@@ -34,7 +34,7 @@ export interface ToolContext {
 }
 export type ToolFactory = (ctx: ToolContext) => Tool;
 
-export type ProviderId = "gateway" | "anthropic" | "openai";
+export type ProviderId = string;   // a provider id from src/providers.ts (or a custom one in ~/.lex/config.json)
 export interface ModelInfo { spec: string; provider: ProviderId; id: string }
 export interface ResolvedModel extends ModelInfo { model: LanguageModel }
 

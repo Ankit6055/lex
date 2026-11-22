@@ -1,27 +1,18 @@
-// The model layer: what makes the model swappable. Three providers, each with your own key.
-import { createGateway } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModel } from "ai";
+// The model layer: what makes the model swappable. Specs like `groq:openai/gpt-oss-120b` are
+// resolved against the provider registry (src/providers.ts) using your own keys.
 import type { ModelInfo, ProviderId, ResolvedModel } from "./types.ts";
-import { ENV_VARS, PROVIDERS, getKey, readConfig } from "./auth.ts";
+import { BUILTIN_PROVIDERS, baseURLOf, buildModel, fetchModelIds, type ProviderDef } from "./providers.ts";
+import { getKey, getProviders, readConfig } from "./auth.ts";
 
-/** Verified 2026-11-22. Gateway ids use dots; direct Anthropic ids use dashes. */
-export const DEFAULTS: Record<ProviderId, string> = {
-  gateway: "anthropic/claude-sonnet-5.5",
-  anthropic: "claude-sonnet-5-5",
-  openai: "gpt-6.2-sol",
-};
-
-const SHORTLIST: Record<ProviderId, string[]> = {
-  gateway: ["anthropic/claude-sonnet-5.5", "anthropic/claude-opus-5.5", "anthropic/claude-haiku-5.5", "openai/gpt-6.2-sol", "openai/gpt-6.2-astra", "zai/glm-5.3"],
-  anthropic: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
-  openai: ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.1-terra"],
-};
+/** First default candidate per built-in provider (the live catalog may pick a later one). */
+export const DEFAULTS: Record<ProviderId, string> = Object.fromEntries(
+  BUILTIN_PROVIDERS.filter((p) => p.models.length).map((p) => [p.id, p.models[0]!]),
+);
 
 export const NO_KEY_MESSAGE = `No API key found. Lex is bring-your-own-key. Set one of:
   AI_GATEWAY_API_KEY   (recommended: one key, every model. vercel.com/ai-gateway)
-  ANTHROPIC_API_KEY    OPENAI_API_KEY
+  ANTHROPIC_API_KEY  OPENAI_API_KEY  OPENROUTER_API_KEY  GEMINI_API_KEY  XAI_API_KEY
+  DEEPSEEK_API_KEY  MISTRAL_API_KEY  GROQ_API_KEY  ... (see: lex --help)
 or run: lex login`;
 
 export class ModelError extends Error {
@@ -33,57 +24,56 @@ const toGatewayClaude = (id: string) => id.replace(/-(\d+)-(\d+)$/, "-$1.$2");
 /** `claude-sonnet-5.5` -> `claude-sonnet-5-5` (Anthropic API style). */
 const toAnthropicClaude = (id: string) => id.replace(/(\d+)\.(\d+)$/, "$1-$2");
 
+/** Bare model-name prefixes and the direct provider (and gateway creator) that owns them. */
+const BARE_PREFIXES: { test: RegExp; provider: string; creator: string; toGateway?: (id: string) => string }[] = [
+  { test: /^claude-/, provider: "anthropic", creator: "anthropic", toGateway: toGatewayClaude },
+  { test: /^(gpt-|o\d)/, provider: "openai", creator: "openai" },
+  { test: /^gemini-/, provider: "google", creator: "google" },
+  { test: /^grok-/, provider: "xai", creator: "spacexai" },
+];
+
 /**
- * Pure spec parser (§4.1). `hasKey` decides where a bare `claude-*` / `gpt-*` id goes.
- *   provider:id         explicit
- *   creator/model       gateway
- *   claude-* / gpt-* / o<digit>*   direct provider if its key exists, else gateway
+ * Pure spec parser. An empty `id` means "that provider's default".
+ *   provider:id          explicit, e.g. groq:openai/gpt-oss-120b
+ *   provider             a provider's default model, e.g. deepseek
+ *   creator/model        gateway, e.g. zai/glm-5.3
+ *   claude-* gpt-* gemini-* grok-*   the direct provider if you have its key, else the gateway
  */
-export function parseSpec(spec: string, hasKey: (p: ProviderId) => boolean): { provider: ProviderId; id: string } {
+export function parseSpec(
+  spec: string,
+  hasKey: (p: ProviderId) => boolean,
+  providers: ProviderDef[] = BUILTIN_PROVIDERS,
+): { provider: ProviderId; id: string } {
   const s = spec.trim();
+  const known = (p: string) => providers.some((d) => d.id === p);
   const colon = s.indexOf(":");
-  if (colon > 0) {
-    const provider = s.slice(0, colon) as ProviderId;
+  if (colon > 0 && !s.slice(0, colon).includes("/")) {
+    const provider = s.slice(0, colon);
     const id = s.slice(colon + 1);
-    if (!PROVIDERS.includes(provider)) {
-      throw new ModelError(`Unknown provider "${s.slice(0, colon)}". Use one of: ${PROVIDERS.join(", ")} (e.g. gateway:${DEFAULTS.gateway}).`);
+    if (!known(provider)) {
+      throw new ModelError(`Unknown provider "${provider}". Known: ${providers.map((d) => d.id).join(", ")}.`);
     }
-    if (!id) throw new ModelError(`Missing model id after "${provider}:". e.g. ${provider}:${DEFAULTS[provider]}`);
     return { provider, id: provider === "anthropic" ? toAnthropicClaude(id) : id };
   }
+  if (known(s)) return { provider: s, id: "" };
   if (s.includes("/")) return { provider: "gateway", id: s };
-  if (s.startsWith("claude-")) {
-    return hasKey("anthropic") ? { provider: "anthropic", id: toAnthropicClaude(s) } : { provider: "gateway", id: `anthropic/${toGatewayClaude(s)}` };
+  for (const b of BARE_PREFIXES) {
+    if (!b.test.test(s)) continue;
+    if (hasKey(b.provider)) return { provider: b.provider, id: b.provider === "anthropic" ? toAnthropicClaude(s) : s };
+    return { provider: "gateway", id: `${b.creator}/${b.toGateway ? b.toGateway(s) : s}` };
   }
-  if (s.startsWith("gpt-") || /^o\d/.test(s)) {
-    return hasKey("openai") ? { provider: "openai", id: s } : { provider: "gateway", id: `openai/${s}` };
-  }
-  throw new ModelError(`Can't tell which provider "${s}" belongs to. Use provider:id, e.g. gateway:${DEFAULTS.gateway} or anthropic:${DEFAULTS.anthropic}.`);
+  throw new ModelError(`Can't tell which provider "${s}" belongs to. Use provider:id, e.g. gateway:${DEFAULTS.gateway} or groq:${DEFAULTS.groq}.`);
 }
 
-async function keysPresent(): Promise<Record<ProviderId, string | undefined>> {
-  const [gateway, anthropic, openai] = await Promise.all(PROVIDERS.map(getKey));
-  return { gateway, anthropic, openai };
-}
-
-function build(provider: ProviderId, id: string, apiKey: string): LanguageModel {
-  switch (provider) {
-    case "gateway": return createGateway({ apiKey })(id);
-    case "anthropic": return createAnthropic({ apiKey })(id);
-    case "openai": return createOpenAI({ apiKey })(id);
+const liveCache = new Map<string, Promise<string[] | undefined>>();
+/** Live model ids for a provider, cached for the session. `undefined` if the catalog is unreachable. */
+export function liveModels(p: ProviderDef, apiKey: string | undefined, ms = 5000): Promise<string[] | undefined> {
+  let cached = liveCache.get(p.id);
+  if (!cached) {
+    cached = fetchModelIds(p, apiKey, ms).catch(() => undefined);
+    liveCache.set(p.id, cached);
   }
-}
-
-let gatewayCache: Promise<string[] | undefined> | undefined;
-/** Live gateway language-model ids, cached for the session. `undefined` if unreachable. */
-export function gatewayModels(apiKey: string): Promise<string[] | undefined> {
-  gatewayCache ??= Promise.race([
-    createGateway({ apiKey }).getAvailableModels().then((r) =>
-      r.models.filter((m) => !m.modelType || m.modelType === "language").map((m) => m.id),
-    ),
-    new Promise<undefined>((res) => setTimeout(res, 5000).unref?.()),
-  ]).catch(() => undefined);
-  return gatewayCache;
+  return cached;
 }
 
 /** Up to `n` candidates closest to `query` (substring hits first, then edit distance). */
@@ -114,57 +104,77 @@ export function closeMatches(query: string, candidates: string[], n = 5): string
     .map((x) => x.c);
 }
 
+async function keysFor(providers: ProviderDef[]): Promise<Record<ProviderId, string | undefined>> {
+  const keys = await Promise.all(providers.map((p) => getKey(p.id)));
+  return Object.fromEntries(providers.map((p, i) => [p.id, keys[i]]));
+}
+
+/** Catalogs complete enough that an unknown id is almost certainly a typo. */
+const STRICT_CATALOGS = new Set(["gateway", "openrouter"]);
+
 /**
  * Resolution order: spec arg (--model) → LEX_MODEL → config.json defaultModel →
- * first provider with a key (gateway → anthropic → openai).
+ * the first (non-local) provider you have a key for, in registry order.
  */
 export async function resolveModel(spec?: string): Promise<ResolvedModel> {
-  const keys = await keysPresent();
+  const providers = await getProviders();
+  const keys = await keysFor(providers);
   const chosen = spec || process.env.LEX_MODEL || (await readConfig()).defaultModel;
-  let provider: ProviderId, id: string;
+
+  let providerId: ProviderId, id: string;
   if (chosen) {
-    ({ provider, id } = parseSpec(chosen, (p) => !!keys[p]));
+    ({ provider: providerId, id } = parseSpec(chosen, (p) => !!keys[p], providers));
   } else {
-    const first = PROVIDERS.find((p) => keys[p]);
+    const first = providers.find((p) => !p.local && keys[p.id]);
     if (!first) throw new ModelError(NO_KEY_MESSAGE);
-    provider = first;
-    id = DEFAULTS[first];
+    providerId = first.id;
+    id = "";
   }
-  const apiKey = keys[provider];
-  if (!apiKey) {
+  const p = providers.find((d) => d.id === providerId)!;
+  const apiKey = keys[p.id];
+  if (p.env && !apiKey) {
     throw new ModelError(
-      PROVIDERS.some((p) => keys[p])
-        ? `No ${provider} key. Set ${ENV_VARS[provider]} or run: lex login`
+      providers.some((d) => d.env && keys[d.id])
+        ? `No ${p.id} key. Set ${p.env} or run: lex login`
         : NO_KEY_MESSAGE,
     );
   }
-  if (provider === "gateway") {
-    const live = await gatewayModels(apiKey);
+
+  if (!id) {
+    const live = await liveModels(p, apiKey);
+    id = p.models.find((m) => live?.includes(m)) ?? p.models[0] ?? live?.[0] ?? "";
+    if (!id) {
+      throw new ModelError(p.local
+        ? `Couldn't reach ${p.label} at ${baseURLOf(p)}. Start it, or set ${p.id.toUpperCase()}_BASE_URL.`
+        : `No default model for ${p.id}. Use ${p.id}:<model-id> (see: lex models).`);
+    }
+  } else if (STRICT_CATALOGS.has(p.id)) {
+    const live = await liveModels(p, apiKey);
     if (live && !live.includes(id)) {
       const near = closeMatches(id, live);
-      throw new ModelError(`Unknown gateway model "${id}".${near.length ? ` Did you mean:\n  ${near.map((m) => `gateway:${m}`).join("\n  ")}` : ""}`);
+      throw new ModelError(`Unknown ${p.id} model "${id}".${near.length ? ` Did you mean:\n  ${near.map((m) => `${p.id}:${m}`).join("\n  ")}` : ""}`);
     }
   }
-  return { spec: `${provider}:${id}`, provider, id, model: build(provider, id, apiKey) };
+  return { spec: `${p.id}:${id}`, provider: p.id, id, model: buildModel(p, id, apiKey) };
 }
 
-/** A short, curated list for `/model` (the full gateway list is hundreds of entries). */
+/** A short, curated list for `/model`: each keyed provider's default candidates. */
 export async function suggestedModels(): Promise<ModelInfo[]> {
-  const keys = await keysPresent();
-  return PROVIDERS.filter((p) => keys[p]).flatMap((provider) =>
-    SHORTLIST[provider].map((id) => ({ spec: `${provider}:${id}`, provider, id })),
-  );
+  const providers = await getProviders();
+  const keys = await keysFor(providers);
+  return providers
+    .filter((p) => !p.local && keys[p.id])
+    .flatMap((p) => p.models.slice(0, p.id === "gateway" ? 9 : 3).map((id) => ({ spec: `${p.id}:${id}`, provider: p.id, id })));
 }
 
-/** Models reachable with the keys you have: live gateway list plus static direct shortlists. */
+/** Every model your keys (and any running local servers) can reach, from each provider's live catalog. */
 export async function listAvailable(): Promise<ModelInfo[]> {
-  const keys = await keysPresent();
-  const out: ModelInfo[] = [];
-  for (const provider of PROVIDERS) {
-    const key = keys[provider];
-    if (!key) continue;
-    const ids = provider === "gateway" ? ((await gatewayModels(key)) ?? SHORTLIST.gateway) : SHORTLIST[provider];
-    for (const id of ids) out.push({ spec: `${provider}:${id}`, provider, id });
-  }
-  return out;
+  const providers = await getProviders();
+  const keys = await keysFor(providers);
+  const usable = providers.filter((p) => p.local || keys[p.id]);
+  const lists = await Promise.all(usable.map((p) => liveModels(p, keys[p.id], p.local ? 1500 : 5000)));
+  return usable.flatMap((p, i) => {
+    const ids = lists[i] ?? (p.local ? [] : p.models);
+    return ids.map((id) => ({ spec: `${p.id}:${id}`, provider: p.id, id }));
+  });
 }
