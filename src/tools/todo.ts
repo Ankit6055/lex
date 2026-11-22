@@ -26,26 +26,7 @@ export function renderTodos(items: readonly TodoItem[]): string {
   return `Todos (${done}/${items.length} done):\n${lines.join("\n")}`;
 }
 
-const DESCRIPTION = `Track a short plan for multi-step work as a checklist the user can see. Actions: add, start, complete, list.
-
-WHEN TO USE:
-- A task has 3 or more distinct steps (e.g. "add an endpoint, write tests, update docs").
-- Before starting each step (\`start\`) and right after finishing it (\`complete\`), so progress stays visible.
-- The user gives you several things to do at once.
-
-WHEN NOT TO USE:
-- Single-step or trivial requests (one edit, one question); just do them.
-- Recording facts for future sessions: use \`remember\`.
-
-DO NOT USE FOR:
-- Asking the user anything: use \`ask_user\`.
-- Having more than one item in progress: only one item can be in_progress at a time. Complete the current one before starting another.
-
-EXAMPLES:
-- {"action": "add", "description": "Add /health route"}
-- {"action": "start", "id": 1}
-- {"action": "complete", "id": 1}
-- {"action": "list"}`;
+const DESCRIPTION = `Track a multi-step plan the user can see: add, start (one item at a time), complete, list.`;
 
 export const createTodoTool: ToolFactory = (_ctx) => {
   const items: TodoItem[] = [];
@@ -58,8 +39,8 @@ export const createTodoTool: ToolFactory = (_ctx) => {
     description: DESCRIPTION,
     inputSchema: z.object({
       action: z.enum(["add", "start", "complete", "list"]),
-      description: z.string().optional().describe("Required for add: what the step is."),
-      id: z.number().int().optional().describe("Required for start and complete: the item's #id."),
+      description: z.string().optional().describe("Step text (for add)"),
+      id: z.number().int().optional().describe("Item id (for start/complete)"),
     }),
     execute: async ({ action, description, id }) => {
       try {

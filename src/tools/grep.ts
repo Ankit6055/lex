@@ -223,28 +223,7 @@ export function grepRg(
 
 // ---- tool ----
 
-const description = `Search file contents with a regular expression. Returns matching lines as "path:line: text", relative to the project root. Uses ripgrep when installed (respecting .gitignore), otherwise a built-in search.
-
-WHEN TO USE:
-- You need to find where something is defined or used: a function, class, variable, string, config key, error message.
-- You want to narrow a search to certain files with glob, e.g. "*.ts" or "src/**/*.tsx".
-
-WHEN NOT TO USE:
-- You want to find files by name: use ls with a pattern.
-- You already know the file and want to see it: use read.
-
-DO NOT USE FOR:
-- Paths outside the project root; they are refused.
-- Searching node_modules, .git or dist; they are skipped.
-- Reading whole files: grep shows single lines only, so follow up with read.
-
-EXAMPLES:
-- grep({ pattern: "function createServer" })
-- grep({ pattern: "TODO|FIXME", path: "src" })
-- grep({ pattern: "import .* from \\"zod\\"", glob: "*.ts" })
-- grep({ pattern: "export (const|function) \\\\w+Tool", path: "src/tools" })
-
-The pattern is a regex (JavaScript/Rust syntax, case-sensitive). Output is capped at ${GREP_MAX_MATCHES} matches with the total count; each line is cut at ${GREP_MAX_LINE_CHARS} chars. If capped, refine the pattern, path or glob.`;
+const description = `Search file contents with a regex. Returns path:line: text, capped at 50 matches (with the total count).`;
 
 /** Factory with an injectable engine so tests can force the JS fallback. */
 export function makeGrepTool(ctx: ToolContext, opts: { engine?: GrepEngine } = {}): Tool {
@@ -252,9 +231,9 @@ export function makeGrepTool(ctx: ToolContext, opts: { engine?: GrepEngine } = {
   return tool({
     description,
     inputSchema: z.object({
-      pattern: z.string().min(1).describe("Regular expression to search for"),
-      path: z.string().optional().describe('File or directory to search, relative to the project root (default ".")'),
-      glob: z.string().optional().describe('Only search files matching this glob, e.g. "*.ts" or "src/**/*.md"'),
+      pattern: z.string().min(1).describe("Regex"),
+      path: z.string().optional().describe("File or directory (default .)"),
+      glob: z.string().optional().describe("Only files matching this glob"),
     }),
     execute: async ({ pattern, path: p = ".", glob }, options) => {
       try {

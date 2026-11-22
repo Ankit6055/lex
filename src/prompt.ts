@@ -1,74 +1,39 @@
 import path from "node:path";
 import type { PromptContext } from "./types.ts";
 
-/** Build the system prompt. Pure: same context in, same string out. Optional sections are omitted when empty. */
+/**
+ * Build the system prompt. Pure: same context in, same string out.
+ * Kept deliberately short (every token here is paid on every step): one identity line, a few
+ * rules that only mention tools that exist, then tagged context sections that are omitted when empty.
+ */
 export function buildSystemPrompt(ctx: PromptContext): string {
   const has = (name: string) => ctx.toolNames.includes(name);
-  const sections: string[] = [];
+  const rules = [
+    "Read a file before editing it. Make the smallest change that works and match the surrounding style.",
+    has("bash") && "Use read/ls/grep for files and bash for everything else.",
+    "After changing code, run the project's tests or type check if it has them. Report what you verified.",
+    has("todo") && "Track tasks with 3 or more steps with todo.",
+    has("task") && "Delegate broad, read-heavy questions to task to keep your context small.",
+    has("ask_user") && "If you're blocked on a decision that matters, ask with ask_user; otherwise pick a sensible default.",
+    has("remember") && "Save durable facts (commands, conventions, preferences) with remember.",
+    "Be concise. Show file paths clearly.",
+  ].filter(Boolean);
 
-  // 1. Identity
-  const identity = [`You are Lex, a coding agent working in \`${ctx.cwd}\` on ${ctx.os}.`];
-  if (ctx.date) identity.push(`Today's date is ${ctx.date}.`);
-  if (ctx.gitBranch) identity.push(`Current git branch: ${ctx.gitBranch}.`);
-  sections.push(identity.join("\n"));
+  const sections = [
+    "You are lex, a coding agent. Help the user inspect files, run commands and change code.",
+    rules.map((r) => `- ${r}`).join("\n"),
+    `<env>\ncwd: ${ctx.cwd}\nos: ${ctx.os}${ctx.date ? `\ndate: ${ctx.date}` : ""}${ctx.gitBranch ? `\ngit branch: ${ctx.gitBranch}` : ""}\n</env>`,
+  ];
 
-  // 2. Agency
-  sections.push(
-    [
-      "# Agency",
-      "- Act; don't explain what you would do. Do the work with your tools, then summarize briefly.",
-      "- Search the codebase before creating anything new; reuse what exists.",
-      "- Make the smallest change that solves the task. Match the surrounding style.",
-      "- Read a file before editing it.",
-      "- After changes, run the project's tests or typecheck if it has them.",
-      "- Report results honestly: say what you verified, what failed, and what you didn't check.",
-    ].join("\n"),
-  );
-
-  // 3. Tools
-  const tools = ["# Tools", `Available: ${ctx.toolNames.join(", ")}.`];
-  if (has("bash")) tools.push("Prefer read/grep/ls over bash for exploring and reading files.");
-  if (has("task")) tools.push("For broad questions that need many searches and reads, delegate to `task` (a read-only explorer) to keep your context small.");
-  sections.push(tools.join("\n"));
-
-  // 4. Handling ambiguity
-  const ambiguity = ["# Handling ambiguity", "1. Search the code and docs first; most answers are already there."];
-  if (has("ask_user")) {
-    ambiguity.push("2. If it's still unclear and the choice matters, ask with `ask_user` (2-4 concrete options).");
-    ambiguity.push("3. Then act on the answer.");
-  } else {
-    ambiguity.push("2. Otherwise make the most reasonable assumption, state it, and act.");
-  }
-  sections.push(ambiguity.join("\n"));
-
-  // 5. Planning
-  if (has("todo")) {
-    sections.push(
-      "# Planning\nFor tasks with 3 or more steps, use `todo` to list the steps, keep one in progress, and complete each as you go.",
-    );
-  }
-
-  // 6. Project instructions
   if (ctx.projectInstructions?.content.trim()) {
     const { file, content } = ctx.projectInstructions;
     const shown = path.isAbsolute(file) ? path.relative(ctx.cwd, file) || path.basename(file) : file;
-    sections.push(`# Project instructions\nFrom \`${shown}\`. Follow these:\n\n${content.trim()}`);
+    sections.push(`<project_instructions path="${shown}">\n${content.trim()}\n</project_instructions>`);
   }
-
-  // 7. Memory
-  const memory: string[] = [];
-  if (ctx.memory?.trim()) memory.push(`Facts saved from earlier sessions:\n${ctx.memory.trim()}`);
-  if (has("remember")) {
-    memory.push("Use `remember` to save durable facts (commands, conventions, user preferences) for future sessions.");
-  }
-  if (memory.length) sections.push(["# Memory", ...memory].join("\n"));
-
-  // 8. Skills
+  if (ctx.memory?.trim()) sections.push(`<memory>\n${ctx.memory.trim()}\n</memory>`);
   if (ctx.skills?.length) {
-    const skills = ["# Skills", ...ctx.skills.map((s) => `- ${s.name}: ${s.description}`)];
-    if (has("load_skill")) skills.push("Load a skill's full instructions with `load_skill` when the task matches.");
-    sections.push(skills.join("\n"));
+    const hint = has("load_skill") ? "\nLoad a skill with load_skill when it fits the task." : "";
+    sections.push(`<skills>\n${ctx.skills.map((s) => `- ${s.name}: ${s.description}`).join("\n")}\n</skills>${hint}`);
   }
-
   return sections.join("\n\n");
 }

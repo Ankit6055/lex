@@ -7,23 +7,7 @@ import type { ToolFactory } from "../types.ts";
 export const MEMORY_MAX_CHARS = 4_000;
 const FACT_MAX_CHARS = 500;
 
-const DESCRIPTION = `Save one durable fact about this project or the user's preferences to .lex/memory.md, which is loaded into future sessions.
-
-WHEN TO USE:
-- The user states a lasting preference ("always use pnpm", "never touch generated/").
-- You discover a non-obvious project fact worth knowing next time (how to run tests, a required env var, a gotcha).
-
-WHEN NOT TO USE:
-- Temporary task state or progress: use \`todo\`.
-- Facts already in the project's instructions file or obvious from the code.
-
-DO NOT USE FOR:
-- Secrets, API keys, tokens or passwords. Never store them.
-- Long notes or code; keep each fact to one short sentence.
-
-EXAMPLES:
-- {"fact": "Run tests with \`bun test\`; the e2e suite needs DATABASE_URL."}
-- {"fact": "User prefers small commits with conventional commit messages."}`;
+const DESCRIPTION = `Save one durable fact (a command, convention or preference) to project memory for future sessions. Never secrets.`;
 
 function today(): string {
   const d = new Date();
@@ -50,7 +34,7 @@ export const createRememberTool: ToolFactory = (ctx) =>
   tool({
     description: DESCRIPTION,
     inputSchema: z.object({
-      fact: z.string().describe("One short sentence to remember in future sessions."),
+      fact: z.string().describe("One short sentence"),
     }),
     execute: async ({ fact }) => {
       try {

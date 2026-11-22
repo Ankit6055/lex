@@ -36,26 +36,7 @@ const WRAP_UP_PROMPT = "You are an explorer subagent that has run out of steps. 
 const WRAP_UP_ITEM_CHARS = 2_000;
 const WRAP_UP_TOTAL_CHARS = 24_000;
 
-const DESCRIPTION = `Delegate a read-only investigation to an explorer subagent. It runs on a cheaper model with only read, ls and grep, takes up to ${TASK_MAX_STEPS} steps, and returns a concise summary with file paths and line numbers. Its file reads stay out of your context, so this keeps your own context small.
-
-WHEN TO USE:
-- Answering a broad question that needs several searches and reads: "where is X defined and who calls it?", "how does auth work here?".
-- Surveying an unfamiliar part of the codebase before you plan a change.
-
-WHEN NOT TO USE:
-- You already know the file: just use read.
-- A single grep or ls would answer it: call that directly; it is faster and cheaper.
-- You need exact file contents to edit: read the file yourself (the summary is not a substitute).
-
-DO NOT USE FOR:
-- Making changes, running commands or tests: the explorer is read-only and cannot run bash.
-- Questions about things outside the project directory, or that need the internet.
-
-EXAMPLES:
-- task({ description: "Find where the retry logic for HTTP requests lives and summarize how backoff is computed." })
-- task({ description: "List every place the config file is read, with file:line for each." })
-
-Write the description as a self-contained question: the explorer cannot see this conversation. Output is capped at ${TASK_MAX_CHARS} chars.`;
+const DESCRIPTION = `Delegate a read-only investigation to a subagent (read, ls, grep on a cheaper model). Returns a summary with file paths and line numbers.`;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -129,7 +110,7 @@ export function createTaskTool(
   return tool({
     description: DESCRIPTION,
     inputSchema: z.object({
-      description: z.string().describe("A self-contained question or investigation for the explorer"),
+      description: z.string().describe("Self-contained question to investigate"),
     }),
     execute: async ({ description }, { abortSignal }) => {
       const question = description.trim();

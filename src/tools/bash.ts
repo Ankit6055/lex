@@ -14,29 +14,7 @@ const BUFFER_KEEP = 20_000;
 export const READONLY_BASH =
   "Refused: this session is read-only. Only safe read commands run (ls, pwd, cat, head, tail, wc, which, echo, git status/log/diff/show, with no pipes, redirects or chaining). Tell the user what you would run instead.";
 
-const DESCRIPTION = `Run a shell command in the project root and return its exit code plus combined stdout/stderr (last ${OUTPUT_CAP} chars).
-
-WHEN TO USE:
-- Running tests, builds, type checks, linters, package scripts (e.g. \`bun test\`, \`npm run build\`).
-- Inspecting git state (\`git status\`, \`git diff\`, \`git log -5 --oneline\`).
-- Running a program to see its real behavior or error output.
-
-WHEN NOT TO USE:
-- Reading a file: use \`read\`. Listing or finding files: use \`ls\`. Searching contents: use \`grep\`.
-- Creating or changing files: use \`write\` / \`edit\` (not echo/sed/cat redirects).
-- Long-running servers or watchers (\`npm run dev\`, \`--watch\`): they block until the timeout kills them.
-
-DO NOT USE FOR:
-- Interactive commands that wait for input (editors, prompts, REPLs); stdin is closed.
-- Destructive or irreversible actions (rm -rf, force push, dropping data) unless the user explicitly asked.
-- Talking to the user; use \`ask_user\` for questions.
-
-EXAMPLES:
-- {"command": "bun test"}
-- {"command": "git diff --stat"}
-- {"command": "npm run build", "timeout_ms": 180000}
-
-Notes: commands other than simple read-only ones need the user's approval. If the user denies, ask them how to proceed.`;
+const DESCRIPTION = `Run a shell command in the project root. Returns the exit code and the last ${OUTPUT_CAP} chars of output. Default timeout ${DEFAULT_TIMEOUT_MS / 1000}s; don't start servers or watchers. Asks for approval unless the command is read-only.`;
 
 type RunResult = { header: string; output: string };
 
@@ -133,14 +111,14 @@ export const createBashTool: ToolFactory = (ctx) =>
   tool({
     description: DESCRIPTION,
     inputSchema: z.object({
-      command: z.string().describe("The shell command to run in the project root."),
+      command: z.string().describe("Shell command"),
       timeout_ms: z
         .number()
         .int()
         .positive()
         .max(600_000)
         .optional()
-        .describe(`Kill the command after this many ms (default ${DEFAULT_TIMEOUT_MS}).`),
+        .describe("Timeout in ms"),
     }),
     execute: async ({ command, timeout_ms }, options) => {
       try {

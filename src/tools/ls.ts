@@ -13,34 +13,14 @@ export function hasIgnoredSegment(p: string): boolean {
   return p.split(/[\\/]/).some((seg) => IGNORED_DIRS.has(seg));
 }
 
-const description = `List files and directories in the project, optionally filtered by a glob pattern. Directories end with "/". Paths are relative to the project root.
-
-WHEN TO USE:
-- You are new to a project or folder and need to see what's in it: ls({}) or ls({ path: "src" }).
-- You need to find files by name or extension across subfolders: ls({ pattern: "**/*.test.ts" }).
-
-WHEN NOT TO USE:
-- You are looking for text inside files: use grep.
-- You already know the file path and want its contents: use read.
-
-DO NOT USE FOR:
-- Paths outside the project root, or patterns containing ".."; they are refused.
-- Exploring node_modules, .git or dist; they are always skipped.
-
-EXAMPLES:
-- ls({})                                   // top level of the project
-- ls({ path: "src/tools" })                // one directory
-- ls({ pattern: "**/*.md" })               // all markdown files, recursively
-- ls({ path: "src", pattern: "**/*.ts" })  // TypeScript files under src
-
-The default pattern is "*" (the directory itself, not recursive). Output is capped at ${LS_MAX_ENTRIES} entries; when cut, the result says how many were found so you can narrow the pattern.`;
+const description = `List files and directories (glob pattern optional). Skips node_modules, .git and dist; capped at 200 entries.`;
 
 export const createLsTool: ToolFactory = (ctx) =>
   tool({
     description,
     inputSchema: z.object({
-      path: z.string().optional().describe('Directory to list, relative to the project root (default ".")'),
-      pattern: z.string().optional().describe('Glob pattern relative to path, e.g. "*.ts" or "**/*.test.ts" (default "*")'),
+      path: z.string().optional().describe("Directory (default .)"),
+      pattern: z.string().optional().describe("Glob, e.g. **/*.ts"),
     }),
     execute: async ({ path: p = ".", pattern = "*" }) => {
       try {

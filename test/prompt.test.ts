@@ -13,19 +13,19 @@ const ALL_TOOLS = ["read", "ls", "grep", "write", "edit", "bash", "todo", "ask_u
 const base: PromptContext = { cwd: "/work/app", os: "macOS 25.0", date: "2026-11-22", toolNames: ALL_TOOLS };
 
 describe("buildSystemPrompt", () => {
-  test("minimal context: identity, core sections, no optional sections", () => {
+  test("minimal context: identity, rules, env; no optional sections", () => {
     const p = buildSystemPrompt(base);
-    expect(p.startsWith("You are Lex, a coding agent working in `/work/app` on macOS 25.0.")).toBe(true);
-    expect(p).toContain("2026-11-22");
-    for (const h of ["# Agency", "# Tools", "# Handling ambiguity", "# Planning", "# Memory"]) expect(p).toContain(h);
+    expect(p.startsWith("You are lex, a coding agent.")).toBe(true);
+    expect(p).toContain("<env>\ncwd: /work/app\nos: macOS 25.0\ndate: 2026-11-22\n</env>");
     expect(p).not.toContain("git branch");
-    expect(p).not.toContain("# Project instructions");
-    expect(p).not.toContain("# Skills");
-    expect(p).not.toContain("Facts saved");
-    expect(p).toContain(ALL_TOOLS.join(", "));
+    for (const tag of ["<project_instructions", "<memory>", "<skills>"]) expect(p).not.toContain(tag);
   });
 
-  test("sections appear in the specified order", () => {
+  test("stays small: the full-context prompt is under 1,600 chars before user content", () => {
+    expect(buildSystemPrompt({ ...base, toolNames: [...ALL_TOOLS, "task", "load_skill"], gitBranch: "main" }).length).toBeLessThan(1600);
+  });
+
+  test("sections appear in order: identity, rules, env, instructions, memory, skills", () => {
     const p = buildSystemPrompt({
       ...base,
       gitBranch: "main",
@@ -33,62 +33,52 @@ describe("buildSystemPrompt", () => {
       memory: "- (2026-11-01) tests: bun test",
       skills: [{ name: "deploy", description: "Ship to prod" }],
     });
-    const order = ["You are Lex", "# Agency", "# Tools", "# Handling ambiguity", "# Planning", "# Project instructions", "# Memory", "# Skills"];
+    const order = ["You are lex", "- Read a file before editing", "<env>", "<project_instructions", "<memory>", "<skills>"];
     const idx = order.map((h) => p.indexOf(h));
     expect(idx.every((i) => i >= 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
   });
 
   test("branch line only when present", () => {
-    expect(buildSystemPrompt({ ...base, gitBranch: "feat/x" })).toContain("Current git branch: feat/x.");
-    expect(buildSystemPrompt(base)).not.toContain("Current git branch");
+    expect(buildSystemPrompt({ ...base, gitBranch: "feat/x" })).toContain("git branch: feat/x");
+    expect(buildSystemPrompt(base)).not.toContain("git branch");
   });
 
-  test("project instructions show file and content", () => {
+  test("project instructions show the file (relative to cwd) and content", () => {
     const p = buildSystemPrompt({ ...base, projectInstructions: { file: "/work/CLAUDE.md", content: "Always use tabs." } });
-    expect(p).toContain("# Project instructions");
-    expect(p).toContain("`../CLAUDE.md`");
-    expect(p).toContain("Always use tabs.");
+    expect(p).toContain('<project_instructions path="../CLAUDE.md">\nAlways use tabs.\n</project_instructions>');
   });
 
-  test("memory contents only when present; remember hint whenever the tool exists", () => {
+  test("memory contents only when present; remember rule whenever the tool exists", () => {
     const withMem = buildSystemPrompt({ ...base, memory: "- (2026-11-01) run `make check`" });
-    expect(withMem).toContain("run `make check`");
-    expect(withMem).toContain("Use `remember`");
+    expect(withMem).toContain("<memory>\n- (2026-11-01) run `make check`\n</memory>");
+    expect(withMem).toContain("with remember");
     const noMem = buildSystemPrompt(base);
-    expect(noMem).toContain("# Memory");
-    expect(noMem).toContain("Use `remember`");
-    expect(noMem).not.toContain("make check");
-    const noTool = buildSystemPrompt({ ...base, toolNames: ["read"] });
-    expect(noTool).not.toContain("# Memory");
+    expect(noMem).not.toContain("<memory>");
+    expect(noMem).toContain("with remember");
     const noToolWithMem = buildSystemPrompt({ ...base, toolNames: ["read"], memory: "fact A" });
     expect(noToolWithMem).toContain("fact A");
-    expect(noToolWithMem).not.toContain("`remember`");
+    expect(noToolWithMem).not.toContain("remember");
   });
 
   test("skills: one line each, omitted when empty", () => {
     const p = buildSystemPrompt({
       ...base,
+      toolNames: [...ALL_TOOLS, "load_skill"],
       skills: [
         { name: "deploy", description: "Ship to prod" },
         { name: "review", description: "Review a diff" },
       ],
     });
-    expect(p).toContain("# Skills\n- deploy: Ship to prod\n- review: Review a diff");
-    expect(buildSystemPrompt({ ...base, skills: [] })).not.toContain("# Skills");
+    expect(p).toContain("<skills>\n- deploy: Ship to prod\n- review: Review a diff\n</skills>\nLoad a skill with load_skill");
+    expect(buildSystemPrompt({ ...base, skills: [] })).not.toContain("<skills>");
   });
 
-  test("tool-specific guidance only when the tool is available", () => {
+  test("tool-specific rules only when the tool is available", () => {
     const p = buildSystemPrompt({ ...base, toolNames: ["read", "grep", "ls"] });
-    expect(p).not.toContain("# Planning");
-    expect(p).not.toContain("`todo`");
-    expect(p).not.toContain("`ask_user`");
-    expect(p).not.toContain("over bash");
-    expect(p).toContain("# Handling ambiguity");
-    const full = buildSystemPrompt(base);
-    expect(full).toContain("`todo`");
-    expect(full).toContain("`ask_user`");
-    expect(full).toContain("Prefer read/grep/ls over bash");
+    for (const name of ["todo", "ask_user", "bash", "task", "remember"]) expect(p).not.toContain(name);
+    const full = buildSystemPrompt({ ...base, toolNames: [...ALL_TOOLS, "task"] });
+    for (const name of ["todo", "ask_user", "bash", "task", "remember"]) expect(full).toContain(name);
   });
 
   test("is pure", () => {

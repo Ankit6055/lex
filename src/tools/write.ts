@@ -15,33 +15,14 @@ export function countLines(s: string): number {
 
 const PREVIEW_LINES = 20;
 
-const description = `Create a new file, or completely replace an existing file, with the given content. Parent directories are created as needed. The user is asked to approve each write.
-
-WHEN TO USE:
-- Creating a brand-new file (source, test, config, docs).
-- Rewriting a small file almost entirely, where a targeted edit would be clumsier.
-
-WHEN NOT TO USE:
-- Changing part of an existing file: use edit, which is safer and shows the user a precise diff.
-- You haven't read an existing file yet: read it first so you don't lose content.
-
-DO NOT USE FOR:
-- Paths outside the project root; they are refused.
-- Appending to a file (write replaces the whole file; use edit or include the full content).
-- Binary files, or generated output that a build step should produce.
-
-EXAMPLES:
-- write({ path: "src/utils/slug.ts", content: "export function slug(s: string) {\\n  return s.toLowerCase();\\n}\\n" })
-- write({ path: "test/slug.test.ts", content: "..." })
-
-If the user denies the write, or the session is read-only, nothing is written and you get a message saying so: don't retry the same write; ask the user how to proceed.`;
+const description = `Create or overwrite a file; parent directories are created. Asks the user for approval.`;
 
 export const createWriteTool: ToolFactory = (ctx) =>
   tool({
     description,
     inputSchema: z.object({
-      path: z.string().describe("File path, relative to the project root"),
-      content: z.string().describe("The full new content of the file"),
+      path: z.string().describe("File path"),
+      content: z.string().describe("Full file content"),
     }),
     execute: async ({ path: p, content }) =>
       serialize(async () => {

@@ -84,7 +84,7 @@ describe("discoverSkills", () => {
     const ctx = await loadContext(root);
     expect(ctx.skills).toEqual([{ name: "deploy", description: "Ship it" }]);
     const p = buildSystemPrompt({ ...ctx, toolNames: ["read", "load_skill"] });
-    expect(p).toContain("# Skills\n- deploy: Ship it");
+    expect(p).toContain("<skills>\n- deploy: Ship it\n</skills>");
     expect(p).toContain("load_skill");
   });
 });

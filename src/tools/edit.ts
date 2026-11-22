@@ -48,36 +48,16 @@ export function miniDiff(
   return { text, added: added.length, removed: removed.length };
 }
 
-const description = `Replace an exact string in an existing file. old_string must match the file exactly (including whitespace and indentation) and, unless replace_all is true, must occur exactly once. The user is shown a diff and asked to approve.
-
-WHEN TO USE:
-- Changing part of an existing file: fixing a bug, renaming within a file, adding a function or import.
-- Renaming every occurrence of something in one file: set replace_all: true.
-
-WHEN NOT TO USE:
-- Creating a new file, or rewriting a file wholesale: use write.
-- You haven't read the file in this conversation: read it first so old_string matches exactly.
-
-DO NOT USE FOR:
-- Paths outside the project root; they are refused.
-- Regex or fuzzy replacements: matching is literal.
-- Text copied with read's line-number prefixes: strip the "123<TAB>" prefix first.
-
-EXAMPLES:
-- edit({ path: "src/api.ts", old_string: "const port = 3000;", new_string: "const port = Number(process.env.PORT ?? 3000);" })
-- edit({ path: "src/user.ts", old_string: "getUser", new_string: "fetchUser", replace_all: true })
-- To make a match unique, include surrounding lines in old_string (for example the function signature above the line).
-
-If old_string is not found, or matches more than once without replace_all, nothing changes and the error tells you why. If the user denies the edit or the session is read-only, nothing changes: don't retry; ask the user how to proceed.`;
+const description = `Replace exact text in a file. old_string must match exactly once unless replace_all is set. Read the file first. Asks the user for approval.`;
 
 export const createEditTool: ToolFactory = (ctx) =>
   tool({
     description,
     inputSchema: z.object({
-      path: z.string().describe("File path, relative to the project root"),
-      old_string: z.string().describe("Exact text to replace (must match the file byte for byte)"),
+      path: z.string().describe("File path"),
+      old_string: z.string().describe("Exact text to replace"),
       new_string: z.string().describe("Replacement text"),
-      replace_all: z.boolean().optional().describe("Replace every occurrence instead of requiring exactly one (default false)"),
+      replace_all: z.boolean().optional().describe("Replace every occurrence"),
     }),
     execute: async ({ path: p, old_string, new_string, replace_all }) =>
       serialize(async () => {

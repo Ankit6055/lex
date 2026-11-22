@@ -8,7 +8,7 @@ import { buildTools } from "./tools/index.ts";
 import { loadContext } from "./context.ts";
 import { buildSystemPrompt } from "./prompt.ts";
 
-const PLAN_MODE_NOTE = "\n\n# Plan mode\nThe user turned on plan mode: file changes and non-read-only commands are refused. Investigate with read-only tools, then present a concise, numbered plan of the changes you would make, and ask the user to approve it (they leave plan mode with shift+tab).";
+const PLAN_MODE_NOTE = "\n\n<plan_mode>\nChanges are blocked. Investigate with read-only tools, then propose a short numbered plan and ask the user to approve it.\n</plan_mode>";
 
 const CANCELLED_NOTE = "(The user cancelled this request before I finished. I won't continue it unless they ask again.)";
 
