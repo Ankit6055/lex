@@ -60,7 +60,13 @@ export function createApprover(io: IO, mode: ApprovalMode): Approver {
   async function decide(req: ApprovalRequest): Promise<ApprovalResult> {
     if (approver.mode === "yolo") return "allow";
     if (approver.mode === "readonly") return "readonly";
+    if (approver.mode === "edits" && (req.tool === "write" || req.tool === "edit")) return "allow";
     if (always.has(req.alwaysKey)) return "allow";
+    if (io.approve) {
+      const answer = await io.approve({ ...req, alwaysLabel: alwaysLabel(req) });
+      if (answer === "a") always.add(req.alwaysKey);
+      return answer === "n" ? "deny" : "allow";
+    }
 
     const question = `Allow ${req.tool}: ${req.summary} ? [y]es / [n]o / [a]lways ${alwaysLabel(req)}`;
     const text = req.detail ? `${req.detail}\n${question}` : question;

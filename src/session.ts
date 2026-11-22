@@ -8,6 +8,8 @@ import { buildTools } from "./tools/index.ts";
 import { loadContext } from "./context.ts";
 import { buildSystemPrompt } from "./prompt.ts";
 
+const PLAN_MODE_NOTE = "\n\n# Plan mode\nThe user turned on plan mode: file changes and non-read-only commands are refused. Investigate with read-only tools, then present a concise, numbered plan of the changes you would make, and ask the user to approve it (they leave plan mode with shift+tab).";
+
 const CANCELLED_NOTE = "(The user cancelled this request before I finished. I won't continue it unless they ask again.)";
 
 export interface SessionTotals extends TurnUsage {
@@ -75,7 +77,7 @@ export async function createSession(o: {
         const agent = createAgent({
           model,
           tools,
-          instructions: buildSystemPrompt({ ...ctx, toolNames: Object.keys(tools) }),
+          instructions: buildSystemPrompt({ ...ctx, toolNames: Object.keys(tools) }) + (o.approver.mode === "readonly" ? PLAN_MODE_NOTE : ""),
           maxSteps: o.maxSteps,
         });
         const result = await runTurn(agent, messages, t);
@@ -91,6 +93,7 @@ export async function createSession(o: {
         totals.inputTokens += result.usage.inputTokens;
         totals.outputTokens += result.usage.outputTokens;
         totals.ms += result.usage.ms;
+        if (result.usage.genMs) totals.genMs = (totals.genMs ?? 0) + result.usage.genMs;
         return result;
       } catch (e) {
         messages.length = before;

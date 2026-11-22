@@ -69,6 +69,8 @@ export async function runTurn(
         usage.steps++;
         usage.inputTokens += c.usage.inputTokens ?? 0;
         usage.outputTokens += c.usage.outputTokens ?? 0;
+        const out = c.usage.outputTokens ?? 0, tps = c.performance?.outputTokensPerSecond;
+        if (out && tps) usage.genMs = (usage.genMs ?? 0) + (out / tps) * 1000;
       } else if (c.type === "abort") aborted = true;
       else if (c.type === "error") error ??= c.error;
     }

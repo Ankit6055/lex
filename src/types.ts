@@ -1,6 +1,6 @@
 import type { Tool, LanguageModel } from "ai";
 
-export type ApprovalMode = "ask" | "yolo" | "readonly";
+export type ApprovalMode = "ask" | "edits" | "readonly" | "yolo";   // edits: auto-allow write/edit, still ask for bash
 
 export interface ApprovalRequest {
   tool: string;          // "bash" | "write" | "edit"
@@ -24,6 +24,8 @@ export interface IO {
   secret(label: string): Promise<string>;                       // masked input for API keys
   withPaused<T>(fn: () => Promise<T>): Promise<T>;              // stops the spinner around prompts
   info(msg: string): void;                                      // dim line to stderr
+  /** Optional rich approval UI (the interactive terminal uses a dialog); falls back to `confirm`. */
+  approve?(req: ApprovalRequest & { alwaysLabel: string }): Promise<"y" | "n" | "a">;
 }
 
 export interface ToolContext {
@@ -49,4 +51,8 @@ export interface PromptContext {
   skills?: { name: string; description: string }[];
 }
 
-export interface TurnUsage { steps: number; toolCalls: number; inputTokens: number; outputTokens: number; ms: number }
+export interface TurnUsage {
+  steps: number; toolCalls: number; inputTokens: number; outputTokens: number; ms: number;
+  /** Time the model spent streaming output tokens (for tokens/second), when the provider reports it. */
+  genMs?: number;
+}

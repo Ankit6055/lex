@@ -59,8 +59,14 @@ export function resultSuffix(name: string, input: any, output: unknown): string 
 
 const fmtK = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
+/** Output tokens per second while the model was generating, if known. */
+export function tokensPerSecond(u: TurnUsage): number | undefined {
+  return u.genMs && u.outputTokens ? u.outputTokens / (u.genMs / 1000) : undefined;
+}
+
 export function formatFooter(u: TurnUsage, spec: string): string {
-  return `${u.steps} step${u.steps === 1 ? "" : "s"} · ${fmtK(u.inputTokens)} in / ${fmtK(u.outputTokens)} out · ${(u.ms / 1000).toFixed(1)}s · ${spec}`;
+  const tps = tokensPerSecond(u);
+  return `${u.steps} step${u.steps === 1 ? "" : "s"} · ${fmtK(u.inputTokens)} in / ${fmtK(u.outputTokens)} out${tps ? ` · ${Math.round(tps)} tok/s` : ""} · ${(u.ms / 1000).toFixed(1)}s · ${spec}`;
 }
 
 export function createRenderer(o: { spinner?: Spinner; out?: NodeJS.WritableStream; writeErr?: (s: string) => void } = {}) {
