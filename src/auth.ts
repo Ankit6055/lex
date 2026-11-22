@@ -63,17 +63,28 @@ export async function saveKey(p: ProviderId, key: string): Promise<void> {
   await chmod(authPath(), 0o600); // writeFile's mode only applies on create
 }
 
-export async function login(io: IO): Promise<void> {
+/**
+ * Save a provider key. With `providerId` the provider menu is skipped; with `key` nothing is asked
+ * (e.g. a key piped on stdin), so login works in scripts and non-interactive shells too.
+ */
+export async function login(io: IO, opts: { providerId?: string; key?: string } = {}): Promise<ProviderId> {
   const keyed = (await getProviders()).filter((p) => p.env);
-  const label = (p: ProviderDef) => `${p.label} (${p.id})`;
-  const choice = await io.choose("Which provider?", keyed.map(label));
-  const c = choice.trim().toLowerCase();
-  const provider = keyed.find((p) => label(p) === choice) ?? keyed.find((p) => p.id === c) ?? keyed.find((p) => c.includes(p.id));
-  if (!provider) throw new Error(`Unknown provider: ${choice}`);
-  const key = (await io.secret(`Paste your ${provider.env}: `)).trim();
+  let provider: ProviderDef | undefined;
+  if (opts.providerId) {
+    provider = keyed.find((p) => p.id === opts.providerId!.toLowerCase());
+    if (!provider) throw new Error(`Unknown provider "${opts.providerId}". Choose one of: ${keyed.map((p) => p.id).join(", ")}`);
+  } else {
+    const label = (p: ProviderDef) => `${p.label} (${p.id})`;
+    const choice = await io.choose("Which provider?", keyed.map(label));
+    const c = choice.trim().toLowerCase();
+    provider = keyed.find((p) => label(p) === choice) ?? keyed.find((p) => p.id === c) ?? keyed.find((p) => c.includes(p.id));
+    if (!provider) throw new Error(choice.trim() ? `Unknown provider: ${choice}` : "Login cancelled; nothing saved.");
+  }
+  const key = (opts.key ?? (await io.secret(`Paste your ${provider.env}: `))).trim();
   if (!key) throw new Error("No key entered; nothing saved.");
   await saveKey(provider.id, key);
-  io.info(`Saved ${provider.id} key to ${authPath()} (chmod 600).`);
+  io.info(`Saved your ${provider.id} key to ${authPath()} (only you can read it).`);
+  return provider.id;
 }
 
 /** Strip anything key-shaped from text we might print (provider errors can echo headers). */

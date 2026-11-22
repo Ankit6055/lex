@@ -15,7 +15,7 @@ import { t, bold, wordmark, spinnerFrame } from "./theme.ts";
 import { pad, truncate, width, wrapPlain } from "./text.ts";
 import { createApprover } from "../approval.ts";
 import { createSession, type Session } from "../session.ts";
-import { ModelError, NO_KEY_MESSAGE, listAvailable, suggestedModels } from "../models.ts";
+import { NoKeyError, listAvailable, suggestedModels } from "../models.ts";
 import { configDir, login, redact, saveConfig } from "../auth.ts";
 import { loadContext } from "../context.ts";
 import { formatFooter } from "../render.ts";
@@ -157,6 +157,13 @@ export async function runTui(o: ReplOptions): Promise<void> {
     },
   };
 
+  // Until the session exists, the screen shows only an open panel (e.g. the first-run login).
+  screen.setView(() => {
+    if (!panel) return { lines: [] };
+    const v = panel.render(screen.cols);
+    return { lines: v.lines, cursor: v.cursor };
+  });
+
   // Session (offer login on a first run with no key).
   const approver = createApprover(io, o.mode);
   const makeSession = () => createSession({ root: o.root, io, approver, model: o.model, maxSteps: o.maxSteps });
@@ -164,10 +171,15 @@ export async function runTui(o: ReplOptions): Promise<void> {
   try {
     session = await makeSession();
   } catch (e) {
-    if (!(e instanceof ModelError && e.message === NO_KEY_MESSAGE)) { screen.stop(); throw e; }
-    screen.print(t.gold(NO_KEY_MESSAGE));
-    if ((await io.confirm("Set up a key now?")) === "n") { screen.stop(); throw e; }
-    await login(io);
+    if (!(e instanceof NoKeyError)) { screen.stop(); throw e; }
+    // First run with no key: go straight to login, then start the session.
+    screen.print(`  ${t.gold("No API key yet.")} ${t.mist("Pick a provider and paste your key to get started (esc to cancel).")}`);
+    try {
+      await login(io);
+    } catch {
+      screen.stop();
+      throw new NoKeyError();
+    }
     session = await makeSession();
   }
   const modes = o.mode === "yolo" ? [...MODE_CYCLE, "yolo" as const] : MODE_CYCLE;

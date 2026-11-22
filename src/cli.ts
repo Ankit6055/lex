@@ -5,7 +5,7 @@ import path from "node:path";
 import pc from "picocolors";
 import pkg from "../package.json" with { type: "json" };
 import type { ApprovalMode } from "./types.ts";
-import { ModelError, NO_KEY_MESSAGE, listAvailable } from "./models.ts";
+import { ModelError, NoKeyError, noKeyMessage, lexCommand, listAvailable } from "./models.ts";
 import { login, redact } from "./auth.ts";
 import { createRenderer } from "./render.ts";
 import { createIO, startSpinner, stopSpinner, writeWhenIdle } from "./io.ts";
@@ -25,7 +25,7 @@ Usage
   lex                              interactive session in the current directory
   lex "fix the failing test"       one-shot: run, print, exit
   lex compare --models a,b "task"  same task on several models (omit --models to pick them)
-  lex login                        save an API key to ~/.lex/auth.json
+  lex login [provider]             save an API key (or: echo $KEY | lex login <provider>)
   lex models                       list models your keys can reach
 
 Options
@@ -52,7 +52,17 @@ function fail(msg: string, code = 1): never {
 
 async function oneShot(o: { root: string; prompt: string; model?: string; mode: ApprovalMode; maxSteps?: number }) {
   const io = createIO();
-  const session = await createSession({ root: o.root, io, approver: createApprover(io, o.mode), model: o.model, maxSteps: o.maxSteps });
+  const make = () => createSession({ root: o.root, io, approver: createApprover(io, o.mode), model: o.model, maxSteps: o.maxSteps });
+  let session: Awaited<ReturnType<typeof make>>;
+  try {
+    session = await make();
+  } catch (e) {
+    if (!(e instanceof NoKeyError && process.stdin.isTTY)) throw e;
+    // First run with no key in a terminal: log in, then run the prompt.
+    process.stderr.write(pc.yellow("No API key yet. Pick a provider and paste your key to get started (ctrl+c to cancel).\n"));
+    await login(io);
+    session = await make();
+  }
   const controller = new AbortController();
   const onSigint = () => {
     if (controller.signal.aborted) process.exit(130);
@@ -110,12 +120,22 @@ async function main(): Promise<number> {
 
   const [sub, ...rest] = positionals;
   switch (sub) {
-    case "login":
-      await login(createIO());
+    case "login": {
+      // lex login [provider]; a key piped on stdin is saved without any prompt.
+      const providerId = rest[0];
+      if (!process.stdin.isTTY) {
+        if (!providerId) fail(`Usage: echo "$YOUR_KEY" | ${lexCommand()} login <provider>   (e.g. gateway, anthropic, openai)`);
+        let key = "";
+        for await (const chunk of process.stdin) key += chunk;
+        await login(createIO(), { providerId, key });
+      } else {
+        await login(createIO(), { providerId });
+      }
       return 0;
+    }
     case "models": {
       const models = await listAvailable();
-      if (!models.length) fail(NO_KEY_MESSAGE);
+      if (!models.length) fail(noKeyMessage());
       for (const m of models) console.log(m.spec);
       return 0;
     }

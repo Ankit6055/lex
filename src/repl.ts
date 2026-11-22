@@ -8,7 +8,7 @@ import type { ApprovalMode, IO, ModelInfo } from "./types.ts";
 import { createIO, closeIO, startSpinner, stopSpinner, writeWhenIdle } from "./io.ts";
 import { createApprover } from "./approval.ts";
 import { createSession, type Session } from "./session.ts";
-import { ModelError, NO_KEY_MESSAGE, suggestedModels } from "./models.ts";
+import { NoKeyError, suggestedModels } from "./models.ts";
 import { login, redact, saveConfig } from "./auth.ts";
 import { loadContext } from "./context.ts";
 import { createRenderer, formatFooter } from "./render.ts";
@@ -44,10 +44,9 @@ async function startSession(o: ReplOptions, io: IO): Promise<Session> {
   try {
     return await make();
   } catch (e) {
-    if (!(e instanceof ModelError && e.message === NO_KEY_MESSAGE && process.stdin.isTTY)) throw e;
-    say(pc.yellow(NO_KEY_MESSAGE));
-    say();
-    if ((await io.confirm("Set up a key now? [y/n]")) === "n") throw e;
+    if (!(e instanceof NoKeyError && process.stdin.isTTY)) throw e;
+    // First run with no key: go straight to login, then start.
+    say(pc.yellow("No API key yet. Pick a provider and paste your key to get started (ctrl+c to cancel)."));
     await login(io);
     return make();
   }

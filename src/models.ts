@@ -9,14 +9,35 @@ export const DEFAULTS: Record<ProviderId, string> = Object.fromEntries(
   BUILTIN_PROVIDERS.filter((p) => p.models.length).map((p) => [p.id, p.models[0]!]),
 );
 
-export const NO_KEY_MESSAGE = `No API key found. Lex is bring-your-own-key. Set one of:
+/** The command that launched lex (npx or a global install), so hints show something that works as typed. */
+export function lexCommand(): string {
+  return process.env.npm_command === "exec" || /[\\/]_npx[\\/]/.test(process.argv[1] ?? "") ? "npx @ankit6055/lex" : "lex";
+}
+
+export function noKeyMessage(): string {
+  const cmd = lexCommand();
+  return `No API key found. lex is installed fine; it just needs a key to talk to a model.
+
+Log in now:  ${cmd} login
+Or set one of these and run ${cmd} again:
   AI_GATEWAY_API_KEY   (recommended: one key, every model. vercel.com/ai-gateway)
   ANTHROPIC_API_KEY  OPENAI_API_KEY  OPENROUTER_API_KEY  GEMINI_API_KEY  XAI_API_KEY
-  DEEPSEEK_API_KEY  MISTRAL_API_KEY  GROQ_API_KEY  ... (see: lex --help)
-or run: lex login`;
+  DEEPSEEK_API_KEY  MISTRAL_API_KEY  GROQ_API_KEY  ... (see: ${cmd} --help)`;
+}
+
+/** @deprecated use noKeyMessage(); kept for callers that compare messages. */
+export const NO_KEY_MESSAGE = noKeyMessage();
 
 export class ModelError extends Error {
   override name = "ModelError";
+}
+
+/** No provider key is configured at all: interactive callers offer login instead of failing. */
+export class NoKeyError extends ModelError {
+  override name = "NoKeyError";
+  constructor() {
+    super(noKeyMessage());
+  }
 }
 
 /** `claude-sonnet-5-5` -> `claude-sonnet-5.5` (gateway style). */
@@ -126,18 +147,15 @@ export async function resolveModel(spec?: string): Promise<ResolvedModel> {
     ({ provider: providerId, id } = parseSpec(chosen, (p) => !!keys[p], providers));
   } else {
     const first = providers.find((p) => !p.local && keys[p.id]);
-    if (!first) throw new ModelError(NO_KEY_MESSAGE);
+    if (!first) throw new NoKeyError();
     providerId = first.id;
     id = "";
   }
   const p = providers.find((d) => d.id === providerId)!;
   const apiKey = keys[p.id];
   if (p.env && !apiKey) {
-    throw new ModelError(
-      providers.some((d) => d.env && keys[d.id])
-        ? `No ${p.id} key. Set ${p.env} or run: lex login`
-        : NO_KEY_MESSAGE,
-    );
+    if (!providers.some((d) => d.env && keys[d.id])) throw new NoKeyError();
+    throw new ModelError(`No ${p.id} key. Set ${p.env} or run: ${lexCommand()} login ${p.id}`);
   }
 
   if (!id) {
